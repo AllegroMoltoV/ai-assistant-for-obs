@@ -3,6 +3,7 @@
 #include "core/add-kinds.h"
 #include "core/change-request.h"
 #include "core/conversation.h"
+#include "core/obs-values.h"
 #include "core/output-settings-policy.h"
 #include "core/proposals.h"
 #include "core/responses.h"
@@ -586,6 +587,95 @@ void test_conversation_compaction()
 	CHECK(!conv.can_compact());
 }
 
+// OBS 33 のモニタリングは有効と無効だけで、monitor_only には対応する値が無い
+void test_monitoring_values()
+{
+	bool enabled = true;
+	CHECK(monitoring_enabled_from_name(kMonitoringOff, enabled) && !enabled);
+	CHECK(monitoring_enabled_from_name(kMonitoringAndOutput, enabled) && enabled);
+	CHECK(!monitoring_enabled_from_name(kMonitoringOnly, enabled));
+	CHECK(std::string(monitoring_name(true)) == kMonitoringAndOutput);
+}
+
+// トラック 1 が最下位のビット、トラック 6 が 6 番目のビット
+void test_track_mixers()
+{
+	CHECK(tracks_to_mixers(json::array({1})) == 0x1u);
+	CHECK(tracks_to_mixers(json::array({1, 6})) == 0x21u);
+	CHECK(tracks_to_mixers(json::array()) == 0u);
+	// OBS は 6 本より上のビットも持ちうるが、道具では 1-6 だけを見せる
+	CHECK(mixers_to_tracks(0xFFu) == json::array({1, 2, 3, 4, 5, 6}));
+	CHECK(mixers_to_tracks(0x21u) == json::array({1, 6}));
+}
+
+void test_output_key_and_config_text()
+{
+	OutputKey key;
+	CHECK(parse_output_key("SimpleOutput/VBitrate", key));
+	CHECK(key.kind == OutputKey::Kind::Config && key.container == "SimpleOutput" && key.name == "VBitrate");
+	CHECK(parse_output_key("streamEncoder.json/bitrate", key));
+	CHECK(key.kind == OutputKey::Kind::StreamEncoderJson && key.name == "bitrate");
+	CHECK(parse_output_key("recordEncoder.json/rate_control", key));
+	CHECK(key.kind == OutputKey::Kind::RecordEncoderJson);
+	CHECK(!parse_output_key("VBitrate", key));
+	CHECK(!parse_output_key("SimpleOutput/", key));
+	CHECK(!parse_output_key("streamEncoder.json/a/b", key));
+
+	std::string text;
+	CHECK(to_config_text(json(4500), text) && text == "4500");
+	CHECK(to_config_text(json(true), text) && text == "true");
+	CHECK(to_config_text(json("hybrid_mp4"), text) && text == "hybrid_mp4");
+	CHECK(to_config_text(json(2.5), text) && text == "2.5");
+	CHECK(!to_config_text(json::array({1}), text));
+	CHECK(!to_config_text(json(nullptr), text));
+}
+
+// 反映の成否の判定に使う値。OBS の丸めと FPS の表に合わないと、成功した変更を失敗として戻してしまう
+void test_expected_video()
+{
+	VideoConfig config;
+	config.base_cx = 1920;
+	config.base_cy = 1080;
+	config.output_cx = 1282;
+	config.output_cy = 721;
+	config.fps_type = 0;
+	config.fps_common = "59.94";
+	VideoExpectation v = expected_video(config);
+	CHECK(v.base_width == 1920 && v.base_height == 1080);
+	CHECK(v.output_width == 1280 && v.output_height == 720);
+	CHECK(v.fps_num == 60000 && v.fps_den == 1001);
+
+	config.fps_common = "unknown";
+	CHECK(expected_video(config).fps_num == 30);
+
+	config.fps_type = 2;
+	config.fps_num = 120;
+	config.fps_den = 2;
+	v = expected_video(config);
+	CHECK(v.fps_num == 120 && v.fps_den == 2);
+
+	// 32 未満は OBS が既定の解像度に直す
+	config.base_cx = 0;
+	config.output_cx = 10;
+	v = expected_video(config);
+	CHECK(v.base_width == 1920 && v.output_width == 1920 && v.output_height == 1080);
+}
+
+void test_log_file_selection()
+{
+	CHECK(pick_latest_log_file({"2026-11-10 08-00-00.txt", "2026-11-12 07-59-59.txt", "2026-11-11 23-00-00.txt"}) ==
+	      "2026-11-12 07-59-59.txt");
+	// クラッシュの記録や他のファイルは対象にしない
+	CHECK(pick_latest_log_file({"2026-11-10 08-00-00.txt", "Crash 2026-11-12 09-00-00.txt", "zz.txt",
+				    "2026-11-13 08-00-00.log"}) == "2026-11-10 08-00-00.txt");
+	CHECK(pick_latest_log_file({}).empty());
+
+	CHECK(last_lines("a\nb\nc\n", 2) == "b\nc");
+	CHECK(last_lines("a\r\nb\r\nc", 2) == "b\nc");
+	CHECK(last_lines("a\nb", 300) == "a\nb");
+	CHECK(last_lines("", 300).empty());
+}
+
 } // namespace
 
 int main()
@@ -603,6 +693,11 @@ int main()
 	test_decide_change();
 	test_proposal_book();
 	test_conversation_compaction();
+	test_monitoring_values();
+	test_track_mixers();
+	test_output_key_and_config_text();
+	test_expected_video();
+	test_log_file_selection();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
