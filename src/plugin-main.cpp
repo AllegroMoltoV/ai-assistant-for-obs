@@ -17,6 +17,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 */
 
 #include "dock.h"
+#include "obs-tools.h"
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -89,6 +90,7 @@ bool obs_module_load(void)
 {
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	log_curl_runtime();
+	aia::start_cpu_usage_monitor();
 	obs_frontend_add_event_callback(on_frontend_event, nullptr);
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;
@@ -99,6 +101,7 @@ void obs_module_unload(void)
 	obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 	// ドックは OBS が破棄する
 	g_dock = nullptr;
+	aia::stop_cpu_usage_monitor();
 	curl_global_cleanup();
 	obs_log(LOG_INFO, "plugin unloaded");
 }

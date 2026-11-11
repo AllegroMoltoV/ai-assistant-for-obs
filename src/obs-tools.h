@@ -10,6 +10,10 @@ namespace aia {
 // OBS とつなぐ層。道具の実行と、提案の適用と取り消しを行う。
 // すべて Qt のメインスレッドから呼ぶ。返す文字列は秘密の値を伏せ、量の上限で切ったもので、そのまま AI に送る
 
+// CPU 使用率は前回の問い合わせからの平均のため、プラグインの読み込み時に計測を始め、解放時に止める
+void start_cpu_usage_monitor();
+void stop_cpu_usage_monitor();
+
 // 取得の道具。結果は JSON の文字列 (read_obs_log だけはログの本文)
 std::string read_obs_status();
 std::string read_scenes_and_sources();
