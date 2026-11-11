@@ -190,6 +190,9 @@ void test_parse_change_settings()
 	CHECK(!parse_change_settings(one_change("audio_volume_db", "Mic", "\"loud\"")).ok);
 	CHECK(parse_change_settings(one_change("audio_monitoring", "Mic", "\"off\"")).ok);
 	CHECK(!parse_change_settings(one_change("audio_monitoring", "Mic", "\"on\"")).ok);
+	// OBS 33 にはモニターだけの種類が無い
+	CHECK(!parse_change_settings(one_change("audio_monitoring", "Mic", "\"monitor_only\"")).ok);
+	CHECK(parse_change_settings(one_change("audio_monitoring", "Mic", "\"monitor_and_output\"")).ok);
 	CHECK(parse_change_settings(one_change("audio_tracks", "Mic", "[1,2]")).ok);
 	CHECK(!parse_change_settings(one_change("audio_tracks", "Mic", "[7]")).ok);
 	CHECK(parse_change_settings(one_change("audio_sync_offset_ms", "Mic", "200")).ok);
@@ -895,7 +898,7 @@ void test_monitoring_values()
 	bool enabled = true;
 	CHECK(monitoring_enabled_from_name(kMonitoringOff, enabled) && !enabled);
 	CHECK(monitoring_enabled_from_name(kMonitoringAndOutput, enabled) && enabled);
-	CHECK(!monitoring_enabled_from_name(kMonitoringOnly, enabled));
+	CHECK(!monitoring_enabled_from_name("monitor_only", enabled));
 	CHECK(std::string(monitoring_name(true)) == kMonitoringAndOutput);
 }
 

@@ -27,9 +27,9 @@ std::string check_value(const ChangeTargetInfo &info, const json &value)
 		return std::string();
 	case ChangeTarget::AudioMonitoring: {
 		const std::string v = value.is_string() ? value.get<std::string>() : std::string();
-		if (v == kMonitoringOff || v == kMonitoringOnly || v == kMonitoringAndOutput)
+		if (v == kMonitoringOff || v == kMonitoringAndOutput)
 			return std::string();
-		return "value_json must be \"off\", \"monitor_only\" or \"monitor_and_output\"";
+		return "value_json must be \"off\" or \"monitor_and_output\"";
 	}
 	case ChangeTarget::AudioSyncOffsetMs:
 		if (!value.is_number_integer())

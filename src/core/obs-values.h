@@ -12,7 +12,7 @@ namespace aia {
 
 // OBS 33 はモニタリングを有効と無効の 2 値で持ち、有効は出力にも流す (OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT 相当)
 const char *monitoring_name(bool enabled);
-// 道具の値をモニタリングの有効に直す。OBS 33 に無い monitor_only と未知の値は偽を返す
+// 道具の値をモニタリングの有効に直す。未知の値は偽を返す
 bool monitoring_enabled_from_name(const std::string &name, bool &enabled);
 
 // 音声トラックの番号 (1-6) の配列と、obs_source_get_audio_mixers のビット (トラック 1 が最下位) の対応

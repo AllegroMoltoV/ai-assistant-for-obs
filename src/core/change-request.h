@@ -37,9 +37,9 @@ struct ChangeTargetInfo {
 const std::vector<ChangeTargetInfo> &change_targets();
 const ChangeTargetInfo *find_change_target(const std::string &name);
 
-// モニタリングの値。OBS の obs_monitoring_type と同じ並び
+// モニタリングの値。OBS 33 のモニタリングは有効と無効の 2 値で、有効は「モニターと出力」に当たる
+// (libobs/obs.h の obs_source_set_monitoring_enabled。種類を選ぶ API は非推奨)
 inline constexpr const char *kMonitoringOff = "off";
-inline constexpr const char *kMonitoringOnly = "monitor_only";
 inline constexpr const char *kMonitoringAndOutput = "monitor_and_output";
 
 // OBS の音量の操作の範囲。ミキサーの上限の 0 dB を超える増幅はゲインのフィルターで行う

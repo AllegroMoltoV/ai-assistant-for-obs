@@ -337,8 +337,7 @@ bool prepare_audio(const Change &change, json &entry, ProposalItem &item, std::s
 	case ChangeTarget::AudioMonitoring: {
 		bool enabled = false;
 		if (!monitoring_enabled_from_name(change.value.get<std::string>(), enabled)) {
-			error = "OBS Studio 33 has no monitor_only mode. Monitoring can only be \"off\" or "
-				"\"monitor_and_output\"";
+			error = "monitoring must be \"off\" or \"monitor_and_output\"";
 			return false;
 		}
 		item.before = monitoring_name(obs_source_get_monitoring_enabled(source));

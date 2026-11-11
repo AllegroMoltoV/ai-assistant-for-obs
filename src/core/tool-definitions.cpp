@@ -60,7 +60,8 @@ json change_settings_schema()
 		{"value_json",
 		 {{"type", "string"},
 		  {"description",
-		   "The new value encoded as JSON, for example true, -6.5, \"monitor_only\", [1,2] or 4500."}}},
+		   "The new value encoded as JSON, for example true, -6.5, \"monitor_and_output\", [1,2] or 4500. "
+		   "audio_monitoring takes \"off\" or \"monitor_and_output\"."}}},
 	});
 
 	return object_schema({
