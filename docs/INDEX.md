@@ -9,6 +9,7 @@ context compaction で文脈が失われた場合は、この索引から必要�
 | 調査レポート | `docs/reports/` |
 | 流用元 obs-realtime-translate-summary の構成 | `docs/reports/2026-11-11-reference-repo-survey.md` |
 | OpenAI の Responses API の仕様と料金、OBS の出力・ログ・統計・ID | `docs/reports/2026-11-11-openai-api-and-obs-behavior.md` |
+| 出力の設定の項目ごとの書き込み先と反映のタイミング、書き換えてよい項目と手順を案内する項目 | `docs/reports/2026-11-11-output-settings-apply.md` |
 | 計画の親課題 | `bd show ai-assistant-for-obs-oea` |
 | 実行ログ (生の出力。git 追跡対象外) | `.logs/` |
 | 実行ログ (残す価値があると判断したもの) | `docs/logs/` |
