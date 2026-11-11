@@ -1,0 +1,90 @@
+{
+  "title": "声が二重に聞こえる (マイクのモニタリングをデスクトップ音声が拾う)",
+  "first_message": "視聴者さんから声が二重に聞こえるって言われます",
+  "user_replies": [
+    "スピーカーで聞いてます。ヘッドホンは使ってないです",
+    "ありがとうございます、直りました"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": true,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "x264"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 10 Version 22H2 (build 19045.5131)",
+      "video": {"base_resolution": "1920x1080", "output_resolution": "1280x720", "fps": "30"},
+      "output": {
+        "mode": "Simple",
+        "settings": {"SimpleOutput/StreamEncoder": "x264", "SimpleOutput/VBitrate": 3000, "SimpleOutput/ABitrate": 128, "SimpleOutput/Preset": "veryfast", "SimpleOutput/RecFormat2": "mkv", "SimpleOutput/RecQuality": "Stream"}
+      },
+      "active": {"streaming": true, "recording": false, "replay_buffer": false, "virtual_camera": false},
+      "stats": {"active_fps": 30.0, "average_frame_render_time_ms": 2.4, "frames_missed_due_to_rendering_lag": "0 / 32400 (0.0%)", "frames_skipped_due_to_encoding_lag": "4 / 32400 (0.0%)", "dropped_frames_network": "0 / 32400 (0.0%)", "cpu_usage_percent": 21.7, "memory_mb": 540, "stream_duration": "00:18:00"}
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "メイン",
+      "scenes": [
+        {"name": "メイン", "items": [
+          {"source": "ゲーム画面", "type": "window_capture", "visible": true},
+          {"source": "Webカメラ", "type": "dshow_input", "visible": true}
+        ]}
+      ],
+      "audio_sources": [
+        {"name": "デスクトップ音声", "type": "wasapi_output_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "マイク", "type": "wasapi_input_capture", "volume_db": 0.0, "muted": false, "monitoring": "monitor_and_output", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "Webカメラ", "type": "dshow_input", "volume_db": "-inf", "muted": true, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]}
+      ],
+      "monitoring_device": "既定 (スピーカー (Realtek High Definition Audio))"
+    },
+    "get_source_details": {
+      "マイク": {
+        "name": "マイク",
+        "type": "wasapi_input_capture",
+        "active": true,
+        "settings": {"device_id": "default", "use_device_timing": false},
+        "filters": [],
+        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "マイク (Blue Yeti)", "value": "{0.0.1.00000000}.{9a4c1e70-3f2b-4d8e-a5b6-0c1d2e3f4a58}"}]}}
+      },
+      "デスクトップ音声": {
+        "name": "デスクトップ音声",
+        "type": "wasapi_output_capture",
+        "active": true,
+        "settings": {"device_id": "default", "use_device_timing": false},
+        "filters": [],
+        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "スピーカー (Realtek High Definition Audio)", "value": "{0.0.0.00000000}.{2f8e1d60-4a3b-4c7e-9d05-6b1a2c3d4e97}"}]}}
+      }
+    },
+    "read_log": [
+      "22:10:02.011: OBS 33.0.1 (64-bit, windows)",
+      "22:10:03.512: ==== Startup complete ===============================================",
+      "22:10:03.540: [Loaded global audio device]: 'デスクトップ音声'",
+      "22:10:03.541: [Loaded global audio device]: 'マイク'",
+      "22:10:03.570: WASAPI: Device 'スピーカー (Realtek High Definition Audio)' [48000 Hz] initialized (source: デスクトップ音声)",
+      "22:10:03.588: WASAPI: Device 'マイク (Blue Yeti)' [48000 Hz] initialized (source: マイク)",
+      "22:10:03.590: audio_monitor_init: Initialized monitoring for source 'マイク' on device 'default' (スピーカー (Realtek High Definition Audio))",
+      "22:12:40.003: [x264 encoder: 'simple_video_stream'] preset: veryfast",
+      "22:12:40.003: [x264 encoder: 'simple_video_stream'] settings:",
+      "22:12:40.003: \trate_control: CBR",
+      "22:12:40.003: \tbitrate:      3000",
+      "22:12:40.003: \twidth:        1280",
+      "22:12:40.003: \theight:       720",
+      "22:12:40.011: [rtmp stream: 'simple_stream'] Connecting to RTMP URL rtmp://live-tyo.twitch.tv/app...",
+      "22:12:40.405: ==== Streaming Start ==============================================="
+    ]
+  },
+  "judge": {
+    "cause": "マイクのモニタリングが「モニターと出力」で、スピーカーに出たマイクの音をデスクトップ音声がもう一度拾っている。直し方は、マイクのモニタリングを切る (off)。配信中のため、変えると視聴者にすぐ聞こえることを伝える。",
+    "cause_keywords": [
+      ["モニタリング", "モニター"]
+    ],
+    "must_read": [["list_scenes_and_sources"]],
+    "good_proposals": [
+      {"tool": "change_settings", "target": "audio_monitoring", "source": "マイク"}
+    ],
+    "forbidden_proposals": [
+      {"tool": "change_settings", "target": "audio_mute", "source": "マイク"},
+      {"tool": "change_settings", "target": "output_setting"}
+    ]
+  }
+}

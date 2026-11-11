@@ -1,0 +1,73 @@
+{
+  "title": "マイクのノイズ (フィルターが無い)",
+  "first_message": "マイクにサーってずっと音が乗ってるらしいです",
+  "user_replies": [
+    "PC のファンの音かもしれないです。エアコンもついてます",
+    "ありがとうございます"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": false,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "nvenc"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 24H2 (build 26100.2314)",
+      "video": {"base_resolution": "1920x1080", "output_resolution": "1920x1080", "fps": "30"},
+      "output": {
+        "mode": "Simple",
+        "settings": {"SimpleOutput/StreamEncoder": "nvenc", "SimpleOutput/VBitrate": 4500, "SimpleOutput/ABitrate": 160, "SimpleOutput/RecFormat2": "hybrid_mp4", "SimpleOutput/RecQuality": "Stream"}
+      },
+      "active": {"streaming": false, "recording": false, "replay_buffer": false, "virtual_camera": false},
+      "stats": {"active_fps": 30.0, "average_frame_render_time_ms": 1.1, "frames_missed_due_to_rendering_lag": "0 / 18000 (0.0%)", "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)", "dropped_frames_network": "0 / 0 (0.0%)", "cpu_usage_percent": 4.0, "memory_mb": 450}
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "雑談",
+      "scenes": [
+        {"name": "雑談", "items": [
+          {"source": "背景", "type": "image_source", "visible": true},
+          {"source": "Webカメラ", "type": "dshow_input", "visible": true}
+        ]}
+      ],
+      "audio_sources": [
+        {"name": "デスクトップ音声", "type": "wasapi_output_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "マイク", "type": "wasapi_input_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "Webカメラ", "type": "dshow_input", "volume_db": "-inf", "muted": true, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]}
+      ]
+    },
+    "get_source_details": {
+      "マイク": {
+        "name": "マイク",
+        "type": "wasapi_input_capture",
+        "active": true,
+        "settings": {"device_id": "{0.0.1.00000000}.{7e3a9c21-5b4d-4f60-8a19-2c3d4e5f6a7b}", "use_device_timing": false},
+        "filters": [],
+        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "マイク (USB PnP Audio Device)", "value": "{0.0.1.00000000}.{7e3a9c21-5b4d-4f60-8a19-2c3d4e5f6a7b}"}, {"name": "マイク配列 (Realtek(R) Audio)", "value": "{0.0.1.00000000}.{0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0}"}]}}
+      }
+    },
+    "read_log": [
+      "15:20:01.330: OBS 33.0.1 (64-bit, windows)",
+      "15:20:02.880: ==== Startup complete ===============================================",
+      "15:20:02.911: [Loaded global audio device]: 'デスクトップ音声'",
+      "15:20:02.912: [Loaded global audio device]: 'マイク'",
+      "15:20:02.945: WASAPI: Device 'スピーカー (Realtek(R) Audio)' [48000 Hz] initialized (source: デスクトップ音声)",
+      "15:20:02.962: WASAPI: Device 'マイク (USB PnP Audio Device)' [48000 Hz] initialized (source: マイク)",
+      "15:20:03.101: Switched to scene '雑談'"
+    ]
+  },
+  "judge": {
+    "cause": "マイクにフィルターが無く、ファンやエアコンの定常的なノイズがそのまま入っている。直し方は、マイクにノイズ抑制のフィルターを追加する (add_item noise_suppression)。",
+    "cause_keywords": [
+      ["ノイズ抑制", "ノイズ除去", "ノイズを抑", "ノイズを除", "ノイズ低減", "ノイズを減ら"]
+    ],
+    "must_read": [["get_source_details:マイク"]],
+    "good_proposals": [
+      {"tool": "add_item", "kind": "noise_suppression", "source": "マイク"}
+    ],
+    "forbidden_proposals": [
+      {"tool": "change_settings", "target": "audio_mute", "source": "マイク"},
+      {"tool": "change_settings", "target": "output_setting"}
+    ]
+  }
+}
