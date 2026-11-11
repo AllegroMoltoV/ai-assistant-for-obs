@@ -481,6 +481,22 @@ void test_decide_change()
 	CHECK(decide_change(wrong_video, idle, OutputMode::Simple, "NV12", "P010") == ChangeDecision::GuideOnly);
 }
 
+// 配信中の注意を出す対象。音声の変更と音声のフィルターの追加だけ
+void test_changes_audio_immediately()
+{
+	CHECK(changes_audio_immediately(ChangeTarget::AudioMute));
+	CHECK(changes_audio_immediately(ChangeTarget::AudioVolumeDb));
+	CHECK(changes_audio_immediately(ChangeTarget::AudioMonitoring));
+	CHECK(changes_audio_immediately(ChangeTarget::AudioSyncOffsetMs));
+	CHECK(changes_audio_immediately(ChangeTarget::AudioTracks));
+	CHECK(!changes_audio_immediately(ChangeTarget::SourceVisibility));
+	CHECK(!changes_audio_immediately(ChangeTarget::OutputSetting));
+	CHECK(changes_audio_immediately(AddKind::NoiseSuppression));
+	CHECK(changes_audio_immediately(AddKind::Compressor));
+	CHECK(!changes_audio_immediately(AddKind::Crop));
+	CHECK(!changes_audio_immediately(AddKind::BrowserSource));
+}
+
 Proposal proposal_for(const char *target_id)
 {
 	Proposal p;
@@ -997,6 +1013,7 @@ int main()
 	test_mask_secrets();
 	test_decide_change();
 	test_proposal_book();
+	test_changes_audio_immediately();
 	test_conversation_compaction();
 	test_session_read_tool_loop();
 	test_session_approval();

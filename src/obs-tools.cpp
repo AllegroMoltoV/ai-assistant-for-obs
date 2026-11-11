@@ -1152,6 +1152,8 @@ Parsed<Proposal> prepare_change_proposal(const ChangeRequest &request)
 		}
 		proposal.items.push_back(std::move(item));
 		entries.push_back(std::move(entry));
+		if ((activity.streaming || activity.recording) && changes_audio_immediately(request.changes[i].target))
+			proposal.live_audio = true;
 	}
 	proposal.apply_data = {{"kind", "change"}, {"changes", std::move(entries)}};
 	result.ok = true;
@@ -1172,6 +1174,8 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 	}
 	if (!add_kind_available(*kind, result.error))
 		return result;
+	const OutputActivity activity = current_output_activity();
+	proposal.live_audio = (activity.streaming || activity.recording) && changes_audio_immediately(kind->kind);
 
 	const std::string parent_name = kind->is_filter ? request.source : request.scene;
 	OBSSourceAutoRelease parent = obs_get_source_by_name(parent_name.c_str());

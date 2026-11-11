@@ -391,6 +391,12 @@ QWidget *Dock::build_proposal(int proposal_id)
 	layout->addWidget(title);
 	if (!proposal->reason.empty())
 		layout->addWidget(wrapped_label(utf8(proposal->reason), frame));
+	// モデルの指示文に頼らず、配信中・録画中の音声の変更では必ず注意を出す
+	if (proposal->live_audio && proposal->state == ProposalState::Pending) {
+		auto *warning = wrapped_label(text("Proposal.LiveAudio"), frame);
+		warning->setStyleSheet("color: #d9534f;");
+		layout->addWidget(warning);
+	}
 
 	// 変える前と後の値の差分を見せる。追加なら追加する内容を見せる
 	for (const auto &item : proposal->items) {

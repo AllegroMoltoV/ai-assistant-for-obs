@@ -34,6 +34,10 @@ enum class ChangeDecision {
 ChangeDecision decide_change(const Change &change, const OutputActivity &activity, OutputMode mode,
 			     const std::string &old_value, const std::string &new_value);
 
+// 適用した瞬間に配信や録画の音声が変わる変更のとき真
+bool changes_audio_immediately(ChangeTarget target);
+bool changes_audio_immediately(AddKind kind);
+
 enum class ProposalState { Pending, Applied, Rejected, Failed, Undone };
 
 // 利用者に見せる 1 件の変更。追加なら before は null
@@ -54,6 +58,8 @@ struct Proposal {
 	std::vector<ProposalItem> items;
 	// 適用と取り消しに使うデータ。中身は OBS とつなぐ層が決める
 	nlohmann::json apply_data;
+	// 配信中か録画中に音声を変える提案のとき真。承認の画面で、視聴者にすぐ聞こえることを必ず示す
+	bool live_audio = false;
 	ProposalState state = ProposalState::Pending;
 	std::string error;
 };

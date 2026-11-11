@@ -19,6 +19,26 @@ ChangeDecision decide_change(const Change &change, const OutputActivity &activit
 	return ChangeDecision::Allowed;
 }
 
+bool changes_audio_immediately(ChangeTarget target)
+{
+	switch (target) {
+	case ChangeTarget::AudioMute:
+	case ChangeTarget::AudioVolumeDb:
+	case ChangeTarget::AudioMonitoring:
+	case ChangeTarget::AudioSyncOffsetMs:
+	case ChangeTarget::AudioTracks:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool changes_audio_immediately(AddKind kind)
+{
+	return kind == AddKind::NoiseSuppression || kind == AddKind::Gain || kind == AddKind::Compressor ||
+	       kind == AddKind::ApplicationAudioCapture;
+}
+
 const char *proposal_state_name(ProposalState state)
 {
 	switch (state) {
