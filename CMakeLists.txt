@@ -99,6 +99,17 @@ if(AIA_BUILD_TESTS)
   endif()
 endif()
 
+# モデルを比べる開発用の道具。OBS を使わずに、模した道具の結果で Responses API と多段の会話をする。CI ではビルドしない
+option(AIA_BUILD_MODEL_EVAL "Build the model comparison tool" OFF)
+if(AIA_BUILD_MODEL_EVAL)
+  add_executable(
+    aia-model-eval
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/model-eval/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/openai-client.cpp"
+  )
+  target_link_libraries(aia-model-eval PRIVATE aia-core CURL::libcurl)
+endif()
+
 # ビルドの直後に OBS のプラグインのフォルダーへ配置する。
 # 導入先はほかのプラグインと共有のため既定は OFF とし、実機で確かめるときだけ ON にする
 option(ENABLE_POST_BUILD_INSTALL "Run cmake --install after build" OFF)

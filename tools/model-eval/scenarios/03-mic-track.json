@@ -1,0 +1,113 @@
+{
+  "title": "配信にマイクの声が入らない (配信のトラックにマイクが割り当てられていない)",
+  "first_message": "配信してたらコメントで声が聞こえないって言われました。OBS のメーターは動いてるんですけど",
+  "user_replies": [
+    "録画は声も入ってたと思います。いま配信中です",
+    "わかりました、やってみます"
+  ],
+  "output_mode": "Advanced",
+  "outputs_active": true,
+  "current_output_settings": {
+    "AdvOut/Encoder": "obs_nvenc_h264_tex",
+    "AdvOut/TrackIndex": "1",
+    "AdvOut/RecTracks": "3"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 24H2 (build 26100.2314)",
+      "video": {"base_resolution": "2560x1440", "output_resolution": "1920x1080", "fps": "60"},
+      "output": {
+        "mode": "Advanced",
+        "settings": {
+          "AdvOut/Encoder": "obs_nvenc_h264_tex",
+          "AdvOut/TrackIndex": 1,
+          "AdvOut/RecTracks": 3,
+          "AdvOut/RecEncoder": "none",
+          "AdvOut/RecFormat2": "mkv",
+          "AdvOut/Track1Bitrate": 160,
+          "AdvOut/Track2Bitrate": 160,
+          "streamEncoder.json": {"rate_control": "CBR", "bitrate": 6000, "preset2": "p5", "keyint_sec": 2, "profile": "high"}
+        }
+      },
+      "active": {"streaming": true, "recording": true, "replay_buffer": false, "virtual_camera": false},
+      "stats": {"active_fps": 60.0, "average_frame_render_time_ms": 2.1, "frames_missed_due_to_rendering_lag": "3 / 98211 (0.0%)", "frames_skipped_due_to_encoding_lag": "0 / 98140 (0.0%)", "dropped_frames_network": "0 / 98140 (0.0%)", "cpu_usage_percent": 11.8, "memory_mb": 655, "stream_duration": "00:27:16"}
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "雑談",
+      "scenes": [
+        {"name": "雑談", "items": [
+          {"source": "背景", "type": "image_source", "visible": true},
+          {"source": "立ち絵", "type": "window_capture", "visible": true},
+          {"source": "マイク", "type": "wasapi_input_capture", "visible": true}
+        ]}
+      ],
+      "audio_sources": [
+        {"name": "デスクトップ音声", "type": "wasapi_output_capture", "volume_db": -6.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2]},
+        {"name": "マイク", "type": "wasapi_input_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [2]},
+        {"name": "立ち絵", "type": "window_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]}
+      ]
+    },
+    "get_source_details": {
+      "マイク": {
+        "name": "マイク",
+        "type": "wasapi_input_capture",
+        "active": true,
+        "settings": {"device_id": "{0.0.1.00000000}.{5d2e9b1a-0c7f-4e83-b4a6-8f1d2e3c4b70}", "use_device_timing": false},
+        "filters": [
+          {"name": "ノイズ抑制", "type": "noise_suppress_filter_v2", "enabled": true, "settings": {"method": "rnnoise"}},
+          {"name": "コンプレッサー", "type": "compressor_filter", "enabled": true, "settings": {"ratio": 4.0, "threshold": -18.0}}
+        ],
+        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "マイク (Shure MV7)", "value": "{0.0.1.00000000}.{5d2e9b1a-0c7f-4e83-b4a6-8f1d2e3c4b70}"}]}}
+      },
+      "デスクトップ音声": {
+        "name": "デスクトップ音声",
+        "type": "wasapi_output_capture",
+        "active": true,
+        "settings": {"device_id": "default", "use_device_timing": false},
+        "filters": []
+      }
+    },
+    "read_log": [
+      "19:58:40.101: OBS 33.0.1 (64-bit, windows)",
+      "19:58:41.902: ==== Startup complete ===============================================",
+      "19:58:41.950: [Loaded global audio device]: 'デスクトップ音声'",
+      "19:58:41.951: [Loaded global audio device]: 'マイク'",
+      "19:58:41.951:     - filters:",
+      "19:58:41.951:         - filter: 'ノイズ抑制' (noise_suppress_filter_v2)",
+      "19:58:41.951:         - filter: 'コンプレッサー' (compressor_filter)",
+      "19:58:41.980: WASAPI: Device 'マイク (Shure MV7)' [48000 Hz] initialized (source: マイク)",
+      "20:01:05.332: ---------------------------------",
+      "20:01:05.332: [NVIDIA NVENC: 'advanced_video_stream'] settings:",
+      "20:01:05.332: \tcodec:        H.264",
+      "20:01:05.332: \trate_control: CBR",
+      "20:01:05.332: \tbitrate:      6000",
+      "20:01:05.332: \tkeyint:       120",
+      "20:01:05.332: \tpreset:       p5",
+      "20:01:05.332: \twidth:        1920",
+      "20:01:05.332: \theight:       1080",
+      "20:01:05.340: [FFmpeg aac encoder: 'adv_stream_aac'] bitrate: 160, channels: 2, channel_setup: stereo",
+      "20:01:05.360: [rtmp stream: 'adv_stream'] Connecting to RTMP URL rtmp://live-tyo.twitch.tv/app...",
+      "20:01:05.811: [rtmp stream: 'adv_stream'] Connection to rtmp://live-tyo.twitch.tv/app (203.0.113.40) successful",
+      "20:01:05.812: ==== Streaming Start ===============================================",
+      "20:01:06.020: [FFmpeg aac encoder: 'Track1'] bitrate: 160, channels: 2, channel_setup: stereo",
+      "20:01:06.021: [FFmpeg aac encoder: 'Track2'] bitrate: 160, channels: 2, channel_setup: stereo",
+      "20:01:06.040: ==== Recording Start ===============================================",
+      "20:01:06.040: [ffmpeg muxer: 'adv_file_output'] Writing file 'C:/Users/streamer/Videos/2026-11-12 20-01-06.mkv'..."
+    ]
+  },
+  "judge": {
+    "cause": "詳細出力で配信の音声はトラック 1 (AdvOut/TrackIndex=1) だが、マイクのトラックは 2 だけで 1 に入っていない。録画はトラック 1 と 2 のため声が入る。直し方は、マイクの音声トラックに 1 を足す (audio_tracks を [1, 2] にする)。配信のトラックの変更は案内に回す項目。",
+    "cause_keywords": [
+      ["トラック 1", "トラック1", "1 番", "1番", "Track 1", "Track1", "トラック 2 だけ", "トラック2だけ", "2 だけ", "2だけ"]
+    ],
+    "must_read": [["list_scenes_and_sources"], ["get_obs_status"]],
+    "good_proposals": [
+      {"tool": "change_settings", "target": "audio_tracks", "source": "マイク"}
+    ],
+    "forbidden_proposals": [
+      {"tool": "change_settings", "target": "output_setting", "key": "AdvOut/TrackIndex"},
+      {"tool": "change_settings", "target": "audio_mute"}
+    ]
+  }
+}

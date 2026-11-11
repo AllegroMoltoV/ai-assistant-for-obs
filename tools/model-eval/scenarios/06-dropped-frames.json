@@ -1,0 +1,84 @@
+{
+  "title": "配信が止まる・フレームが落ちる (回線に対してビットレートが高い)",
+  "first_message": "配信がよく止まるって言われる。なんで？",
+  "user_replies": [
+    "Wi-Fi です。回線の速度を測ったら上りは 8Mbps くらいでした",
+    "配信止めたので変えてください"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": true,
+  "outputs_stop_after_reply": 1,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "nvenc",
+    "SimpleOutput/VBitrate": "9000"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 24H2 (build 26100.2314)",
+      "video": {"base_resolution": "1920x1080", "output_resolution": "1920x1080", "fps": "60"},
+      "output": {
+        "mode": "Simple",
+        "settings": {"SimpleOutput/StreamEncoder": "nvenc", "SimpleOutput/VBitrate": 9000, "SimpleOutput/ABitrate": 160, "SimpleOutput/NVENCPreset2": "p5", "SimpleOutput/RecFormat2": "hybrid_mp4", "SimpleOutput/RecQuality": "Stream"}
+      },
+      "active": {"streaming": true, "recording": false, "replay_buffer": false, "virtual_camera": false},
+      "stats": {"active_fps": 60.0, "average_frame_render_time_ms": 1.4, "frames_missed_due_to_rendering_lag": "2 / 75600 (0.0%)", "frames_skipped_due_to_encoding_lag": "0 / 75600 (0.0%)", "dropped_frames_network": "9473 / 75600 (12.5%)", "congestion": 0.64, "bitrate_kbps_last": 5210, "cpu_usage_percent": 8.9, "memory_mb": 610, "stream_duration": "00:21:00"}
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "ゲーム",
+      "scenes": [
+        {"name": "ゲーム", "items": [
+          {"source": "ゲームキャプチャ", "type": "game_capture", "visible": true},
+          {"source": "マイク", "type": "wasapi_input_capture", "visible": true}
+        ]}
+      ],
+      "audio_sources": [
+        {"name": "デスクトップ音声", "type": "wasapi_output_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "マイク", "type": "wasapi_input_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]}
+      ]
+    },
+    "get_source_details": {},
+    "read_log": [
+      "21:00:01.330: OBS 33.0.1 (64-bit, windows)",
+      "21:00:02.880: ==== Startup complete ===============================================",
+      "21:02:10.010: [NVIDIA NVENC: 'simple_video_stream'] settings:",
+      "21:02:10.010: \tcodec:        H.264",
+      "21:02:10.010: \trate_control: CBR",
+      "21:02:10.010: \tbitrate:      9000",
+      "21:02:10.010: \tkeyint:       120",
+      "21:02:10.010: \tpreset:       p5",
+      "21:02:10.020: [rtmp stream: 'simple_stream'] Connecting to RTMP URL rtmp://live-tyo.twitch.tv/app...",
+      "21:02:10.311: [rtmp stream: 'simple_stream'] Interface: Intel(R) Wi-Fi 6 AX201 160MHz (ethernet, 0 mbps)",
+      "21:02:10.402: [rtmp stream: 'simple_stream'] Connection to rtmp://live-tyo.twitch.tv/app (203.0.113.40) successful",
+      "21:02:10.402: ==== Streaming Start ===============================================",
+      "21:09:31.902: [rtmp stream: 'simple_stream'] Socket send error: 10053",
+      "21:09:31.902: [rtmp stream: 'simple_stream'] Disconnected from rtmp://live-tyo.twitch.tv/app",
+      "21:09:31.903: Output 'simple_stream': stopping",
+      "21:09:31.903: Output 'simple_stream': Total frames output: 23011",
+      "21:09:31.903: Output 'simple_stream': Total drawn frames: 26460",
+      "21:09:31.903: Output 'simple_stream': Number of dropped frames due to insufficient bandwidth/connection stalls: 3302 (12.6%)",
+      "21:09:31.904: Output 'simple_stream': Reconnecting in 2.00 seconds..",
+      "21:09:34.010: [rtmp stream: 'simple_stream'] Connecting to RTMP URL rtmp://live-tyo.twitch.tv/app...",
+      "21:09:34.512: [rtmp stream: 'simple_stream'] Connection to rtmp://live-tyo.twitch.tv/app (203.0.113.40) successful",
+      "21:09:34.513: Output 'simple_stream': Reconnected successfully",
+      "21:17:02.441: [rtmp stream: 'simple_stream'] Socket send error: 10053",
+      "21:17:02.441: [rtmp stream: 'simple_stream'] Disconnected from rtmp://live-tyo.twitch.tv/app",
+      "21:17:02.442: Output 'simple_stream': Reconnecting in 2.00 seconds..",
+      "21:17:04.601: Output 'simple_stream': Reconnected successfully"
+    ]
+  },
+  "judge": {
+    "cause": "Wi-Fi で上り約 8Mbps の回線に対し、映像ビットレート 9000kbps が高すぎ、帯域不足で 12.5% のフレームが落ち、切断と再接続を繰り返している。直し方は、配信を止めてから SimpleOutput/VBitrate を 4500〜6000 程度に下げる。有線にする (OBS の外) も案内する。",
+    "cause_keywords": [
+      ["ネットワーク", "回線", "通信", "帯域", "Wi-Fi", "アップロード", "上り"],
+      ["ビットレート"]
+    ],
+    "must_read": [["get_obs_status", "read_log"]],
+    "good_proposals": [
+      {"tool": "change_settings", "target": "output_setting", "key": "SimpleOutput/VBitrate"}
+    ],
+    "forbidden_proposals": [
+      {"tool": "change_settings", "target": "output_setting", "key": "SimpleOutput/StreamEncoder"}
+    ]
+  }
+}
