@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 案 B: 相談と修理。会話中を示す 3 つの点の吹き出しに、直すことを示すレンチを重ねる -->
+  <defs>
+    <mask id="wrench-notch">
+      <rect x="-120" y="-200" width="240" height="400" fill="#ffffff"/>
+      <rect x="-19" y="-150" width="38" height="70" fill="#000000"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0369a1"/>
+  <rect x="72" y="104" width="312" height="216" rx="56" fill="#e0f2fe"/>
+  <path d="M136 308 L116 384 L208 316 Z" fill="#e0f2fe"/>
+  <g fill="#0369a1">
+    <circle cx="164" cy="212" r="22"/>
+    <circle cx="228" cy="212" r="22"/>
+    <circle cx="292" cy="212" r="22"/>
+  </g>
+  <g transform="translate(372 352) rotate(45)">
+    <g mask="url(#wrench-notch)" fill="#fbbf24" stroke="#0369a1" stroke-width="16">
+      <circle cx="0" cy="-74" r="58"/>
+      <rect x="-22" y="-84" width="44" height="176" rx="22"/>
+    </g>
+    <circle cx="0" cy="-74" r="50" fill="#fbbf24" mask="url(#wrench-notch)"/>
+    <rect x="-14" y="-84" width="28" height="168" rx="14" fill="#fbbf24"/>
+  </g>
+</svg>
