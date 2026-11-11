@@ -88,6 +88,9 @@ set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_nam
 option(AIA_BUILD_TESTS "Build unit tests for the core layer" OFF)
 if(AIA_BUILD_TESTS)
   enable_testing()
+  add_executable(aia-core-tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/core-tests.cpp")
+  target_link_libraries(aia-core-tests PRIVATE aia-core)
+  add_test(NAME aia-core-tests COMMAND aia-core-tests)
   # API キーの保存は DPAPI を使うため Windows だけで確かめる
   if(WIN32)
     add_executable(aia-api-key-tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/api-key-tests.cpp")
