@@ -56,6 +56,8 @@ inline constexpr const char *kNoticeUndone = "Notice.Undone";
 inline constexpr const char *kNoticeUndoFailed = "Error.UndoFailed";
 inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
+// できること・できないこと・質問の例 (/help)。画面の側で中身を描く
+inline constexpr const char *kNoticeHelp = "Notice.Help";
 
 // 1 回の発話から続けて送る要求の上限。道具の呼び出しが止まらない場合に費用が膨らむのを防ぐ
 inline constexpr int kMaxStepsPerTurn = 12;
@@ -74,6 +76,8 @@ public:
 	// 画面とモデルに渡す内容の両方を消す (/clear)
 	void clear();
 	void cancel();
+	// /help の表示を画面の履歴に足す。モデルには送らない
+	void show_help();
 
 	SessionState state() const { return state_; }
 	const Conversation &conversation() const { return conversation_; }

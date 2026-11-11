@@ -17,6 +17,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 */
 
 #include "dock.h"
+#include "obs-tool-host.h"
 #include "obs-tools.h"
 
 #include <obs-frontend-api.h>
@@ -39,6 +40,8 @@ namespace {
 constexpr const char *kDockId = "ai-assistant-for-obs-dock";
 
 QPointer<aia::Dock> g_dock;
+// ドックより長く生きるよう、モジュールの寿命で持つ
+aia::ObsToolHost g_tool_host;
 
 // 実行時に読み込まれた libcurl の版と HTTPS の対応をログに残す
 void log_curl_runtime()
@@ -61,7 +64,7 @@ void register_dock()
 	if (!main_window)
 		return;
 
-	auto *dock = new aia::Dock();
+	auto *dock = new aia::Dock(g_tool_host);
 	dock->setObjectName(kDockId);
 	if (!obs_frontend_add_dock_by_id(kDockId, obs_module_text("Dock.Title"), dock)) {
 		obs_log(LOG_ERROR, "failed to add dock");
