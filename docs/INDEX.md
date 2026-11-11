@@ -13,6 +13,7 @@ context compaction で文脈が失われた場合は、この索引から必要�
 | Web 検索と独自の関数を 1 つの要求で併用した結果 | `docs/logs/2026-11-12-web-search-function-combo.md` |
 | モデルと推論の強さの比較の結果と考察 (試験の道具は `tools/model-eval/`) | `docs/reports/2026-11-12-model-comparison.md` |
 | モデルの比較の会話の全文と自動の集計 | `docs/logs/2026-11-12-model-eval/` |
+| 会話の試験: 確定したモデルでの症状ごとの会話の流れ (依頼者の確認用) | `docs/logs/2026-11-12-conversation-review.md` |
 | 計画の親課題 | `bd show ai-assistant-for-obs-oea` |
 | 実行ログ (生の出力。git 追跡対象外) | `.logs/` |
 | 実行ログ (残す価値があると判断したもの) | `docs/logs/` |
