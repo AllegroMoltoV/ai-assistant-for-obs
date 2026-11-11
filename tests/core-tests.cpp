@@ -2,8 +2,11 @@
 
 #include "core/add-kinds.h"
 #include "core/change-request.h"
+#include "core/conversation.h"
 #include "core/output-settings-policy.h"
+#include "core/proposals.h"
 #include "core/responses.h"
+#include "core/secrets.h"
 #include "core/tool-definitions.h"
 #include "core/tool-output.h"
 
@@ -364,6 +367,225 @@ void test_tool_output_limits()
 	CHECK(contains_word(tail, "\nline"));
 }
 
+// 伏せる対象の 4 種類: 配信キー、配信の URL のキー、URL の問い合わせ文字列のトークン、項目名で判定する秘密の値
+void test_mask_secrets()
+{
+	// 配信の URL のアプリ名より後ろ
+	const std::string rtmp = mask_secrets_in_text("server rtmp://live.twitch.tv/app/live_123456_AbCdEf ok");
+	CHECK(!contains_word(rtmp, "live_123456_AbCdEf"));
+	CHECK(contains_word(rtmp, "rtmp://live.twitch.tv/app/"));
+	const std::string rtmps =
+		mask_secrets_in_text("rtmps://a.rtmps.youtube.com:443/live2/abcd-efgh-ijkl-mnop-qrst");
+	CHECK(!contains_word(rtmps, "abcd-efgh"));
+
+	// URL の問い合わせ文字列の値
+	const std::string query =
+		mask_secrets_in_text("https://streamlabs.com/alert-box/v3/x?token=ABCDEF123&lang=ja#frag");
+	CHECK(!contains_word(query, "ABCDEF123"));
+	CHECK(contains_word(query, "?token=***"));
+	CHECK(contains_word(query, "&lang=***"));
+	CHECK(contains_word(query, "https://streamlabs.com/alert-box/v3/x"));
+	const std::string srt = mask_secrets_in_text("srt://example.com:9000?streamid=abc&passphrase=secret123");
+	CHECK(!contains_word(srt, "secret123"));
+
+	// 形で分かるキー
+	CHECK(!contains_word(mask_secrets_in_text("key sk-proj-ABCDEFGHIJKLMNOPQRSTUV"), "ABCDEFGHIJ"));
+	CHECK(!contains_word(mask_secrets_in_text("Authorization: Bearer abc.def.ghi"), "abc.def.ghi"));
+	CHECK(!contains_word(mask_secrets_in_text("stream key live_987654_ZyXw"), "live_987654_ZyXw"));
+	CHECK(!contains_word(mask_secrets_in_text("abcd-efgh-ijkl-mnop-qrst"), "abcd-efgh-ijkl-mnop-qrst"));
+
+	// 秘密でない文はそのまま
+	const std::string plain = "Output Resolution: 1920x1080, encoder obs_x264, keyint_sec 2";
+	CHECK(mask_secrets_in_text(plain) == plain);
+
+	// 項目名で判定する秘密の値
+	CHECK(is_secret_field_name("key"));
+	CHECK(is_secret_field_name("stream_key"));
+	CHECK(is_secret_field_name("streamKey"));
+	CHECK(is_secret_field_name("bearer_token"));
+	CHECK(is_secret_field_name("password"));
+	CHECK(!is_secret_field_name("keyint_sec"));
+	CHECK(!is_secret_field_name("key_color_type"));
+	CHECK(!is_secret_field_name("hotkey"));
+	CHECK(!is_secret_field_name("bitrate"));
+
+	const json settings = {
+		{"service", "Twitch"},
+		{"server", "rtmp://live.twitch.tv/app"},
+		{"key", "live_111_aaa"},
+		{"use_auth", true},
+		{"password", "hunter2"},
+		{"keyint_sec", 2},
+		{"browser", {{"url", "https://overlay.example/x?token=zzz"}, {"css", "body{}"}}},
+		{"list", json::array({"rtmp://h/app/secretkey", 1})},
+	};
+	const json masked = mask_secrets_in_json(settings);
+	CHECK(masked["key"] == kMaskedValue);
+	CHECK(masked["password"] == kMaskedValue);
+	CHECK(masked["use_auth"] == true);
+	CHECK(masked["keyint_sec"] == 2);
+	CHECK(masked["service"] == "Twitch");
+	CHECK(masked["server"] == "rtmp://live.twitch.tv/app");
+	CHECK(!contains_word(masked["browser"]["url"].get<std::string>(), "zzz"));
+	CHECK(!contains_word(masked["list"][0].get<std::string>(), "secretkey"));
+	CHECK(!contains_word(masked.dump(), "hunter2"));
+	CHECK(!contains_word(masked.dump(), "live_111_aaa"));
+}
+
+Change output_change(const char *key)
+{
+	Change change;
+	change.target = ChangeTarget::OutputSetting;
+	change.key = key;
+	return change;
+}
+
+// 配信中・録画中に出力の設定を変えられないこと
+void test_decide_change()
+{
+	OutputActivity idle;
+	CHECK(decide_change(output_change("SimpleOutput/VBitrate"), idle, OutputMode::Simple, "6000", "4500") ==
+	      ChangeDecision::Allowed);
+	CHECK(decide_change(output_change("SimpleOutput/StreamEncoder"), idle, OutputMode::Simple, "x264", "nvenc") ==
+	      ChangeDecision::GuideOnly);
+
+	bool OutputActivity::*const flags[] = {&OutputActivity::streaming, &OutputActivity::recording,
+					       &OutputActivity::replay_buffer, &OutputActivity::virtual_camera,
+					       &OutputActivity::video_active};
+	for (const auto flag : flags) {
+		OutputActivity active;
+		active.*flag = true;
+		CHECK(decide_change(output_change("SimpleOutput/VBitrate"), active, OutputMode::Simple, "6000",
+				    "4500") == ChangeDecision::BlockedWhileActive);
+		Change video;
+		video.target = ChangeTarget::VideoSetting;
+		video.key = "Video/FPSCommon";
+		CHECK(decide_change(video, active, OutputMode::Simple, "60", "30") ==
+		      ChangeDecision::BlockedWhileActive);
+		// 出力以外の設定は配信中も提案できる
+		Change volume;
+		volume.target = ChangeTarget::AudioVolumeDb;
+		volume.source = "Mic";
+		CHECK(decide_change(volume, active, OutputMode::Simple, "", "") == ChangeDecision::Allowed);
+	}
+
+	Change wrong_video;
+	wrong_video.target = ChangeTarget::VideoSetting;
+	wrong_video.key = "Video/ColorFormat";
+	CHECK(decide_change(wrong_video, idle, OutputMode::Simple, "NV12", "P010") == ChangeDecision::GuideOnly);
+}
+
+Proposal proposal_for(const char *target_id)
+{
+	Proposal p;
+	p.tool = kToolChangeSettings;
+	p.items.push_back({"label", json(0), json(1), target_id});
+	return p;
+}
+
+void test_proposal_book()
+{
+	ProposalBook book;
+	const int a = book.add(proposal_for("audio_volume_db|Mic"));
+	const int b = book.add(proposal_for("audio_volume_db|Mic"));
+	const int c = book.add(proposal_for("audio_mute|Desktop"));
+	CHECK(book.find(a)->state == ProposalState::Pending);
+
+	// 承認前は取り消せない
+	CHECK(!book.can_undo(a));
+	CHECK(book.mark_applied(a));
+	CHECK(!book.mark_applied(a));
+	CHECK(!book.mark_rejected(a));
+	CHECK(book.can_undo(a));
+
+	// 後から同じ対象を変えた提案が適用されている間は、先の提案を取り消せない
+	CHECK(book.mark_applied(b));
+	CHECK(!book.can_undo(a));
+	CHECK(!book.mark_undone(a));
+	CHECK(book.mark_undone(b));
+	CHECK(book.find(b)->state == ProposalState::Undone);
+	CHECK(book.can_undo(a));
+	CHECK(!book.mark_undone(b));
+
+	CHECK(book.mark_rejected(c));
+	CHECK(!book.can_undo(c));
+	CHECK(json::parse(book.tool_output(c))["status"] == "rejected_by_user");
+
+	const int d = book.add(proposal_for("x"));
+	CHECK(book.mark_failed(d, "source not found"));
+	const json failed = json::parse(book.tool_output(d));
+	CHECK(failed["status"] == "failed");
+	CHECK(failed["error"] == "source not found");
+	CHECK(json::parse(book.tool_output(999))["status"] == "unknown_proposal");
+}
+
+ParsedResponse response_with_call(const char *call_id)
+{
+	ParsedResponse r;
+	r.ok = true;
+	r.output_items.push_back({{"type", "reasoning"}, {"id", "rs"}});
+	r.output_items.push_back({{"type", "function_call"}, {"call_id", call_id}, {"name", "get_obs_status"}});
+	r.function_calls.push_back({call_id, "get_obs_status", "{}"});
+	return r;
+}
+
+ParsedResponse response_with_text(const char *text)
+{
+	ParsedResponse r;
+	r.ok = true;
+	r.output_items.push_back({{"type", "message"}, {"role", "assistant"}});
+	r.text = text;
+	return r;
+}
+
+void test_conversation_compaction()
+{
+	Conversation conv;
+	conv.add_user_message("映らない");
+	conv.add_response(response_with_call("call_1"));
+	CHECK(conv.has_pending_calls());
+	// 関数の呼び出しに結果を返すまでは圧縮しない
+	CHECK(!conv.can_compact());
+	conv.add_tool_result("call_1", "get_obs_status", "{\"fps\":60}");
+	CHECK(!conv.has_pending_calls());
+	conv.add_response(response_with_text("原因はキャプチャーの方法です"));
+	CHECK(conv.request_items().size() == 5);
+
+	// 約 80% で圧縮を勧める
+	conv.set_last_input_tokens(kCompactionSuggestTokens - 1);
+	CHECK(!conv.should_suggest_compaction());
+	conv.set_last_input_tokens(kCompactionSuggestTokens);
+	CHECK(conv.should_suggest_compaction());
+	CHECK(conv.can_compact());
+
+	const json summary_request = conv.build_summary_request(ModelConfig{}, "inst", build_tools_json());
+	CHECK(summary_request["tool_choice"] == "none");
+	CHECK(summary_request["input"].size() == 6);
+
+	const size_t shown_before = conv.display().size();
+	conv.apply_compaction("要約: 画面が映らない相談");
+	// 画面の履歴は残し、要約を足す
+	CHECK(conv.display().size() == shown_before + 1);
+	CHECK(conv.display().back().kind == DisplayEntry::Kind::Summary);
+	CHECK(!conv.should_suggest_compaction());
+
+	// モデルには要約と、それ以降の会話だけを渡す
+	auto items = conv.request_items();
+	CHECK(items.size() == 1);
+	CHECK(contains_word(items[0]["content"].get<std::string>(), "要約: 画面が映らない相談"));
+	conv.add_user_message("まだ映らない");
+	items = conv.request_items();
+	CHECK(items.size() == 2);
+	CHECK(items[1]["content"] == "まだ映らない");
+	CHECK(!contains_word(json(items).dump(), "call_1"));
+
+	// /clear は画面とモデルに渡す内容の両方を消す
+	conv.clear();
+	CHECK(conv.display().empty());
+	CHECK(conv.request_items().empty());
+	CHECK(!conv.can_compact());
+}
+
 } // namespace
 
 int main()
@@ -377,6 +599,10 @@ int main()
 	test_build_request();
 	test_parse_response();
 	test_tool_output_limits();
+	test_mask_secrets();
+	test_decide_change();
+	test_proposal_book();
+	test_conversation_compaction();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
