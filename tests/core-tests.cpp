@@ -7,10 +7,12 @@
 #include "core/proposals.h"
 #include "core/responses.h"
 #include "core/secrets.h"
+#include "core/session.h"
 #include "core/tool-definitions.h"
 #include "core/tool-output.h"
 
 #include <cstdio>
+#include <deque>
 #include <set>
 #include <string>
 
@@ -586,6 +588,306 @@ void test_conversation_compaction()
 	CHECK(!conv.can_compact());
 }
 
+// 決めた応答を順に返す偽の送り先。async が真なら、done を呼ばずに保持する
+class FakeTransport : public Transport {
+public:
+	struct Reply {
+		long status;
+		json body;
+		std::string error;
+	};
+	std::deque<Reply> replies;
+	std::vector<json> requests;
+	bool async = false;
+	Done held;
+	int cancels = 0;
+
+	void send(const json &request, Done done) override
+	{
+		requests.push_back(request);
+		if (async) {
+			held = std::move(done);
+			return;
+		}
+		Reply reply = replies.empty() ? Reply{200, text_body("(no more replies)"), ""} : replies.front();
+		if (!replies.empty())
+			replies.pop_front();
+		done(reply.status, reply.body, reply.error);
+	}
+	void cancel() override { ++cancels; }
+
+	static json text_body(const char *text)
+	{
+		return {{"status", "completed"},
+			{"output",
+			 json::array({{{"type", "message"},
+				       {"role", "assistant"},
+				       {"content", json::array({{{"type", "output_text"}, {"text", text}}})}}})},
+			{"usage", {{"input_tokens", 1000}}}};
+	}
+	static json call_body(const char *call_id, const char *name, const std::string &arguments,
+			      long long input_tokens = 1000)
+	{
+		return {{"status", "completed"},
+			{"output", json::array({{{"type", "function_call"},
+						 {"call_id", call_id},
+						 {"name", name},
+						 {"arguments", arguments}}})},
+			{"usage", {{"input_tokens", input_tokens}}}};
+	}
+};
+
+class FakeHost : public ToolHost {
+public:
+	std::vector<std::string> read_calls;
+	int applies = 0;
+	int undos = 0;
+	bool prepare_ok = true;
+	bool apply_ok = true;
+
+	std::string run_read_tool(const std::string &name, const std::string &) override
+	{
+		read_calls.push_back(name);
+		return "{\"fps\":60}";
+	}
+	Parsed<Proposal> prepare_change(const ChangeRequest &request) override
+	{
+		Parsed<Proposal> result;
+		if (!prepare_ok) {
+			result.error = "guide only";
+			return result;
+		}
+		for (const auto &change : request.changes)
+			result.value.items.push_back({change.source, json(0), change.value, "t|" + change.source});
+		result.ok = true;
+		return result;
+	}
+	Parsed<Proposal> prepare_add(const AddRequest &request) override
+	{
+		Parsed<Proposal> result;
+		result.value.items.push_back(
+			{request.name, json(nullptr), json(request.kind->name), "add|" + request.name});
+		result.ok = true;
+		return result;
+	}
+	bool apply(const Proposal &, std::string &error) override
+	{
+		++applies;
+		if (!apply_ok)
+			error = "source not found";
+		return apply_ok;
+	}
+	bool undo(const Proposal &, std::string &) override
+	{
+		++undos;
+		return true;
+	}
+};
+
+const json &last_input_item(const json &request)
+{
+	return request["input"].back();
+}
+
+const std::string kVolumeArgs = one_change("audio_volume_db", "Mic", "-6");
+
+void test_session_read_tool_loop()
+{
+	FakeTransport transport;
+	FakeHost host;
+	Session session(transport, host);
+	transport.replies.push_back({200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}"), ""});
+	transport.replies.push_back({200, FakeTransport::text_body("原因はエンコードの負荷です"), ""});
+
+	session.send_user_message("カクつく");
+	CHECK(session.state() == SessionState::Idle);
+	CHECK(host.read_calls.size() == 1);
+	CHECK(transport.requests.size() == 2);
+	// 2 回目の要求は、道具の結果を最後に持つ
+	CHECK(last_input_item(transport.requests[1])["type"] == "function_call_output");
+	CHECK(last_input_item(transport.requests[1])["call_id"] == "c1");
+	CHECK(session.conversation().display().back().text == "原因はエンコードの負荷です");
+}
+
+void test_session_approval()
+{
+	FakeTransport transport;
+	FakeHost host;
+	Session session(transport, host);
+	transport.replies.push_back({200, FakeTransport::call_body("c1", kToolChangeSettings, kVolumeArgs), ""});
+	transport.replies.push_back({200, FakeTransport::text_body("下げました"), ""});
+
+	session.send_user_message("声が大きい");
+	// 承認を待つ間は要求を送らず、OBS を変えない
+	CHECK(session.state() == SessionState::AwaitingApproval);
+	CHECK(transport.requests.size() == 1);
+	CHECK(host.applies == 0);
+	CHECK(session.proposals().all().size() == 1);
+	// 承認を待つ間は新しい発話を受け付けない
+	session.send_user_message("別の話");
+	CHECK(transport.requests.size() == 1);
+
+	session.approve(1);
+	CHECK(host.applies == 1);
+	CHECK(session.proposals().find(1)->state == ProposalState::Applied);
+	CHECK(transport.requests.size() == 2);
+	const json output = last_input_item(transport.requests[1]);
+	CHECK(output["call_id"] == "c1");
+	CHECK(json::parse(output["output"].get<std::string>())["status"] == "applied");
+	CHECK(session.state() == SessionState::Idle);
+
+	// 取り消すと OBS を戻し、次の要求でモデルに伝える
+	session.undo(1);
+	CHECK(host.undos == 1);
+	CHECK(session.proposals().find(1)->state == ProposalState::Undone);
+	transport.replies.push_back({200, FakeTransport::text_body("了解です"), ""});
+	session.send_user_message("戻しました");
+	const json &items = transport.requests.back()["input"];
+	CHECK(contains_word(items.dump(), "The user undid proposal 1"));
+}
+
+void test_session_reject_and_failures()
+{
+	{
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200, FakeTransport::call_body("c1", kToolChangeSettings, kVolumeArgs), ""});
+		transport.replies.push_back({200, FakeTransport::text_body("わかりました"), ""});
+		session.send_user_message("x");
+		session.reject(1);
+		CHECK(host.applies == 0);
+		const json output = last_input_item(transport.requests[1]);
+		CHECK(json::parse(output["output"].get<std::string>())["status"] == "rejected_by_user");
+	}
+	{
+		// 引数の誤りは提案にせず、誤りをモデルに返して続ける
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200,
+			 FakeTransport::call_body("c1", kToolChangeSettings, one_change("delete_source", "Mic", "1")),
+			 ""});
+		transport.replies.push_back({200, FakeTransport::text_body("できません"), ""});
+		session.send_user_message("消して");
+		CHECK(session.proposals().all().empty());
+		CHECK(transport.requests.size() == 2);
+		CHECK(json::parse(last_input_item(transport.requests[1])["output"].get<std::string>())["status"] ==
+		      "error");
+		CHECK(session.state() == SessionState::Idle);
+	}
+	{
+		// OBS の側で組み立てられない提案 (案内に回す項目など) も、誤りをモデルに返す
+		FakeTransport transport;
+		FakeHost host;
+		host.prepare_ok = false;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200, FakeTransport::call_body("c1", kToolChangeSettings, kVolumeArgs), ""});
+		transport.replies.push_back({200, FakeTransport::text_body("手順を案内します"), ""});
+		session.send_user_message("x");
+		CHECK(session.proposals().all().empty());
+		CHECK(contains_word(last_input_item(transport.requests[1])["output"].get<std::string>(), "guide only"));
+	}
+	{
+		// 適用に失敗したら failed をモデルに返し、画面に知らせる
+		FakeTransport transport;
+		FakeHost host;
+		host.apply_ok = false;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200, FakeTransport::call_body("c1", kToolChangeSettings, kVolumeArgs), ""});
+		transport.replies.push_back({200, FakeTransport::text_body("失敗しました"), ""});
+		session.send_user_message("x");
+		session.approve(1);
+		CHECK(session.proposals().find(1)->state == ProposalState::Failed);
+		CHECK(json::parse(last_input_item(transport.requests[1])["output"].get<std::string>())["status"] ==
+		      "failed");
+		bool noticed = false;
+		for (const auto &entry : session.conversation().display())
+			noticed = noticed || entry.text == kNoticeApplyFailed;
+		CHECK(noticed);
+		// 失敗した提案は取り消せない
+		session.undo(1);
+		CHECK(host.undos == 0);
+	}
+}
+
+void test_session_limits_and_errors()
+{
+	{
+		// 道具の呼び出しが止まらなくても、1 回の発話あたりの要求は上限で止める
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		for (int i = 0; i < 20; ++i)
+			transport.replies.push_back(
+				{200, FakeTransport::call_body(("c" + std::to_string(i)).c_str(), kToolReadLog, "{}"),
+				 ""});
+		session.send_user_message("x");
+		CHECK(transport.requests.size() == static_cast<size_t>(kMaxStepsPerTurn));
+		CHECK(session.state() == SessionState::Idle);
+		CHECK(session.conversation().display().back().text == kNoticeTooManySteps);
+	}
+	{
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{401, json::parse(R"({"error":{"type":"invalid_request_error","code":"invalid_api_key"}})"),
+			 ""});
+		session.send_user_message("x");
+		CHECK(session.conversation().display().back().text == kNoticeInvalidKey);
+		CHECK(session.state() == SessionState::Idle);
+		transport.replies.push_back({0, json(), "Could not resolve host"});
+		session.send_user_message("y");
+		CHECK(session.conversation().display().back().text == kNoticeNetworkError);
+		CHECK(session.conversation().display().back().detail == "Could not resolve host");
+	}
+}
+
+void test_session_compaction_and_cancel()
+{
+	FakeTransport transport;
+	FakeHost host;
+	Session session(transport, host);
+	transport.replies.push_back({200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}", 50000), ""});
+	json big = FakeTransport::text_body("長い相談の答え");
+	big["usage"]["input_tokens"] = kCompactionSuggestTokens + 10;
+	transport.replies.push_back({200, big, ""});
+	session.send_user_message("最初の相談");
+	CHECK(session.conversation().should_suggest_compaction());
+
+	transport.replies.push_back({200, FakeTransport::text_body("要約の本文"), ""});
+	session.compact();
+	CHECK(session.state() == SessionState::Idle);
+	CHECK(transport.requests.back()["tool_choice"] == "none");
+	CHECK(!session.conversation().should_suggest_compaction());
+
+	transport.replies.push_back({200, FakeTransport::text_body("続きの答え"), ""});
+	session.send_user_message("続き");
+	const json &input = transport.requests.back()["input"];
+	CHECK(input.size() == 2);
+	CHECK(contains_word(input[0]["content"].get<std::string>(), "要約の本文"));
+
+	// 取り消した後に届いた古い応答は捨てる
+	transport.async = true;
+	session.send_user_message("もう一つ");
+	CHECK(session.state() == SessionState::Waiting);
+	session.cancel();
+	CHECK(transport.cancels == 1);
+	CHECK(session.state() == SessionState::Idle);
+	const size_t shown = session.conversation().display().size();
+	transport.held(200, FakeTransport::text_body("遅れて届いた答え"), "");
+	CHECK(session.conversation().display().size() == shown);
+
+	session.clear();
+	CHECK(session.conversation().display().empty());
+	CHECK(session.proposals().all().empty());
+}
+
 } // namespace
 
 int main()
@@ -603,6 +905,11 @@ int main()
 	test_decide_change();
 	test_proposal_book();
 	test_conversation_compaction();
+	test_session_read_tool_loop();
+	test_session_approval();
+	test_session_reject_and_failures();
+	test_session_limits_and_errors();
+	test_session_compaction_and_cancel();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

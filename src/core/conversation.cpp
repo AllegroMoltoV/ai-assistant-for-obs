@@ -51,15 +51,18 @@ void Conversation::add_proposal_entry(int proposal_id)
 	display_.push_back(std::move(entry));
 }
 
-void Conversation::add_user_event(const std::string &text)
+void Conversation::add_user_event(const std::string &model_text, const std::string &notice_key,
+				  const std::string &detail)
 {
-	items_.push_back(user_message_item(text));
-	display_.push_back({DisplayEntry::Kind::Notice, text});
+	items_.push_back(user_message_item(model_text));
+	add_notice(notice_key, detail);
 }
 
-void Conversation::add_notice(const std::string &text)
+void Conversation::add_notice(const std::string &notice_key, const std::string &detail)
 {
-	display_.push_back({DisplayEntry::Kind::Notice, text});
+	DisplayEntry entry{DisplayEntry::Kind::Notice, notice_key};
+	entry.detail = detail;
+	display_.push_back(std::move(entry));
 }
 
 std::vector<json> Conversation::request_items() const

@@ -28,7 +28,10 @@ struct DisplayEntry {
 		Notice,
 	};
 	Kind kind = Kind::Notice;
+	// Notice では画面の文言のキー (例: Error.Http)。それ以外では本文
 	std::string text;
+	// Notice の補足。HTTP の状態や提案の番号など
+	std::string detail;
 	std::string tool_name;
 	std::vector<Citation> citations;
 	int proposal_id = 0;
@@ -43,9 +46,9 @@ public:
 	// 道具の結果を items に足す。sent_text は AI に送ったとおりの内容
 	void add_tool_result(const std::string &call_id, const std::string &tool_name, const std::string &sent_text);
 	void add_proposal_entry(int proposal_id);
-	// 利用者が取り消しなどを行ったことを、次の要求でモデルに伝える
-	void add_user_event(const std::string &text);
-	void add_notice(const std::string &text);
+	// 利用者が取り消しなどを行ったことを、次の要求でモデルに伝え、画面には知らせを出す
+	void add_user_event(const std::string &model_text, const std::string &notice_key, const std::string &detail);
+	void add_notice(const std::string &notice_key, const std::string &detail = std::string());
 
 	// 次の要求の input。圧縮した後は、要約と、それ以降の内容だけを返す
 	std::vector<nlohmann::json> request_items() const;
