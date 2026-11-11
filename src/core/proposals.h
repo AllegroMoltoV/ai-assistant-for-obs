@@ -52,6 +52,8 @@ struct Proposal {
 	std::string tool;
 	std::string reason;
 	std::vector<ProposalItem> items;
+	// 適用と取り消しに使うデータ。中身は OBS とつなぐ層が決める
+	nlohmann::json apply_data;
 	ProposalState state = ProposalState::Pending;
 	std::string error;
 };
