@@ -26,8 +26,6 @@ namespace aia {
 
 namespace {
 
-using nlohmann::json;
-
 QString text(const char *key)
 {
 	return QString::fromUtf8(obs_module_text(key));
@@ -56,15 +54,6 @@ QFrame *card(QWidget *parent, const char *object_name)
 	frame->setObjectName(object_name);
 	frame->setFrameShape(QFrame::StyledPanel);
 	return frame;
-}
-
-QString value_text(const json &value)
-{
-	if (value.is_null())
-		return QStringLiteral("-");
-	if (value.is_string())
-		return utf8(value.get<std::string>());
-	return utf8(value.dump());
 }
 
 QString proposal_state_text(ProposalState state)
@@ -402,10 +391,9 @@ QWidget *Dock::build_proposal(int proposal_id)
 	// 変える前と後の値の差分を見せる。追加なら追加する内容を見せる
 	for (const auto &item : proposal->items) {
 		const QString line =
-			item.before.is_null()
-				? text("Proposal.AddLine").arg(utf8(item.label), value_text(item.after))
-				: text("Proposal.ChangeLine")
-					  .arg(utf8(item.label), value_text(item.before), value_text(item.after));
+			item.addition
+				? text("Proposal.AddLine").arg(utf8(item.label), utf8(item.after))
+				: text("Proposal.ChangeLine").arg(utf8(item.label), utf8(item.before), utf8(item.after));
 		auto *label = wrapped_label(line, frame);
 		label->setTextFormat(Qt::PlainText);
 		layout->addWidget(label);

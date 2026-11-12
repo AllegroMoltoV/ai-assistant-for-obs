@@ -40,14 +40,17 @@ bool changes_audio_immediately(AddKind kind);
 
 enum class ProposalState { Pending, Applied, Rejected, Failed, Undone };
 
-// 利用者に見せる 1 件の変更。追加なら before は null
+// 利用者に見せる 1 件の変更
 struct ProposalItem {
-	// 何を変えるかの説明。例: "Mic の音量"
+	// 何を変えるかの説明。例: "Micの音量"
 	std::string label;
-	nlohmann::json before;
-	nlohmann::json after;
+	// 承認の画面に出す、OBS の画面上の名前で表した値。適用と取り消しには Proposal::apply_data を使う
+	std::string before;
+	std::string after;
 	// 同じ対象を変える提案の重なりを判定するための識別子。例: "audio_volume_db|Mic"
 	std::string target_id;
+	// 追加の提案のとき真。before は使わず、after に追加する内容の設定を入れる
+	bool addition = false;
 };
 
 struct Proposal {

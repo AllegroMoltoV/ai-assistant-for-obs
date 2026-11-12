@@ -3,6 +3,7 @@
 #include "core/add-kinds.h"
 #include "core/change-request.h"
 #include "core/conversation.h"
+#include "core/display-names.h"
 #include "core/obs-values.h"
 #include "core/output-settings-policy.h"
 #include "core/proposals.h"
@@ -14,6 +15,8 @@
 
 #include <cstdio>
 #include <deque>
+#include <fstream>
+#include <map>
 #include <set>
 #include <string>
 
@@ -501,7 +504,7 @@ Proposal proposal_for(const char *target_id)
 {
 	Proposal p;
 	p.tool = kToolChangeSettings;
-	p.items.push_back({"label", json(0), json(1), target_id});
+	p.items.push_back({"label", "0", "1", target_id});
 	return p;
 }
 
@@ -678,15 +681,14 @@ public:
 			return result;
 		}
 		for (const auto &change : request.changes)
-			result.value.items.push_back({change.source, json(0), change.value, "t|" + change.source});
+			result.value.items.push_back({change.source, "0", change.value.dump(), "t|" + change.source});
 		result.ok = true;
 		return result;
 	}
 	Parsed<Proposal> prepare_add(const AddRequest &request) override
 	{
 		Parsed<Proposal> result;
-		result.value.items.push_back(
-			{request.name, json(nullptr), json(request.kind->name), "add|" + request.name});
+		result.value.items.push_back({request.name, "", request.kind->name, "add|" + request.name, true});
 		result.ok = true;
 		return result;
 	}
@@ -997,6 +999,148 @@ void test_log_file_selection()
 	CHECK(last_lines("", 300).empty());
 }
 
+// 承認の画面の文言を引くキー。OBS 本体の訳とプラグインの訳を、実行時と同じく別々に引く
+struct FakeUiText {
+	std::map<std::string, std::string> obs_texts = {
+		{"Basic.Settings.Output.Adv.Streaming", "配信"},
+		{"Basic.Settings.Output.Adv.Recording", "録画"},
+		{"Basic.Settings.Audio", "音声"},
+		{"Basic.Settings.Output.VideoBitrate", "映像ビットレート"},
+		{"Basic.Settings.Output.AudioBitrate", "音声ビットレート"},
+		{"Basic.Settings.Output.Adv.Audio.Track1", "トラック 1"},
+		{"Basic.Settings.Output.Adv.Audio.Track2", "トラック 2"},
+		{"Basic.Settings.Output.Adv.Encoder", "エンコーダ設定"},
+		{"Basic.Settings.Video.BaseResolution", "基本 (キャンバス) 解像度"},
+		{"Width", "幅"},
+		{"Yes", "はい"},
+		{"No", "いいえ"},
+		{"Mute", "ミュート"},
+		{"Unmute", "ミュート解除"},
+		{"Basic.AdvAudio.Monitoring.None", "モニターオフ"},
+		{"Basic.AdvAudio.Monitoring.Both", "モニタリング有効"},
+		{"Basic.Settings.Output.Format.hMP4", "Hybrid MP4 (.mp4)"},
+		{"Basic.Settings.Video.DownscaleFilter.Lanczos", "ランチョス (先鋭化スケーリング、36サンプル)"},
+		{"Basic.Settings.Video.FPSFraction", "FPS 分数値"},
+	};
+	std::map<std::string, std::string> plugin_texts = {
+		{"Value.ListSeparator", "、"},
+		{"Value.NoTracks", "なし"},
+	};
+	std::set<std::string> obs_keys;
+	std::set<std::string> plugin_keys;
+
+	UiText ui()
+	{
+		return {[this](const char *key) { return lookup(obs_texts, obs_keys, key); },
+			[this](const char *key) {
+				return lookup(plugin_texts, plugin_keys, key);
+			}};
+	}
+
+	// 表に無いキーは [キー] で返し、引いたキーを記録する
+	static std::string lookup(const std::map<std::string, std::string> &texts, std::set<std::string> &used,
+				  const char *key)
+	{
+		used.insert(key);
+		const auto it = texts.find(key);
+		return it != texts.end() ? it->second : "[" + std::string(key) + "]";
+	}
+};
+
+// data/locale の ini のキー
+std::set<std::string> locale_keys(const char *file)
+{
+	std::set<std::string> keys;
+	std::ifstream in(std::string(AIA_SOURCE_DIR) + "/data/locale/" + file);
+	CHECK(in.good());
+	std::string line;
+	while (std::getline(in, line)) {
+		const size_t eq = line.find('=');
+		if (eq != std::string::npos)
+			keys.insert(line.substr(0, eq));
+	}
+	return keys;
+}
+
+void test_display_names()
+{
+	FakeUiText fake;
+	const UiText ui = fake.ui();
+
+	CHECK(output_setting_label("SimpleOutput/VBitrate", ui) == "配信 > 映像ビットレート");
+	CHECK(output_setting_value("SimpleOutput/VBitrate", json("4500"), ui) == "4500 kbps");
+	CHECK(output_setting_label("AdvOut/Track2Bitrate", ui) == "音声 > トラック 2 > 音声ビットレート");
+	CHECK(output_setting_label("Video/BaseCX", ui) == "基本 (キャンバス) 解像度 > 幅");
+	CHECK(output_setting_value("Video/FPSType", json("2"), ui) == "FPS 分数値");
+	CHECK(output_setting_value("SimpleOutput/UseAdvanced", json("true"), ui) == "はい");
+	CHECK(output_setting_value("AdvOut/VodTrackEnabled", json("false"), ui) == "いいえ");
+	CHECK(output_setting_value("SimpleOutput/RecTracks", json("3"), ui) == "トラック 1、トラック 2");
+	CHECK(output_setting_value("AdvOut/RecTracks", json("0"), ui) == "なし");
+	CHECK(output_setting_value("AdvOut/FLVTrack", json("2"), ui) == "トラック 2");
+	CHECK(output_setting_value("AdvOut/RecFormat2", json("hybrid_mp4"), ui) == "Hybrid MP4 (.mp4)");
+	CHECK(output_setting_value("AdvOut/RescaleFilter", json("4"), ui) ==
+	      "ランチョス (先鋭化スケーリング、36サンプル)");
+	// 選択肢に無い値と未設定は、そのまま示す
+	CHECK(output_setting_value("AdvOut/RecFormat2", json("avi"), ui) == "avi");
+	CHECK(output_setting_value("AdvOut/RescaleFilter", json("1"), ui) == "1");
+	CHECK(output_setting_value("SimpleOutput/VBitrate", json(), ui) == "-");
+	CHECK(output_setting_value("SimpleOutput/x264Settings", json(""), ui) == "-");
+	CHECK(output_setting_label("SimpleOutput/StreamEncoder", ui).empty());
+	CHECK(encoder_setting_label(false, "ビットレート", ui) == "配信 > エンコーダ設定 > ビットレート");
+
+	CHECK(audio_value_text(ChangeTarget::AudioMute, json(true), ui) == "ミュート");
+	CHECK(audio_value_text(ChangeTarget::AudioMute, json(false), ui) == "ミュート解除");
+	CHECK(audio_value_text(ChangeTarget::AudioVolumeDb, json(-6), ui) == "-6.0 dB");
+	CHECK(audio_value_text(ChangeTarget::AudioVolumeDb, json(-12.34), ui) == "-12.3 dB");
+	CHECK(audio_value_text(ChangeTarget::AudioMonitoring, json(kMonitoringOff), ui) == "モニターオフ");
+	CHECK(audio_value_text(ChangeTarget::AudioMonitoring, json(kMonitoringAndOutput), ui) == "モニタリング有効");
+	CHECK(audio_value_text(ChangeTarget::AudioSyncOffsetMs, json(150), ui) == "150 ms");
+	CHECK(audio_value_text(ChangeTarget::AudioTracks, json::array({1, 2}), ui) == "トラック 1、トラック 2");
+	CHECK(audio_value_text(ChangeTarget::AudioTracks, json::array(), ui) == "なし");
+
+	CHECK(plain_value_text(json(), ui) == "-");
+	CHECK(plain_value_text(json(true), ui) == "はい");
+	CHECK(plain_value_text(json(2), ui) == "2");
+	CHECK(plain_value_text(json::array({"a", 1}), ui) == "a、1");
+	CHECK(number_text(json(30), " dB") == "30 dB");
+
+	// 書き換えてよい config の項目は、すべて設定画面の名前で示せる
+	for (const auto &key : writable_output_config_keys())
+		CHECK(!output_setting_label(key, ui).empty());
+
+	// 引いた訳のキーは、どれもプラグインの訳に置いてある。OBS 本体の訳は "OBS.<キー>" に写してある
+	for (const auto &key :
+	     {"Value.Enabled", "Value.Disabled", "Proposal.DefaultSettings", "Proposal.AudioProperty"})
+		fake.plugin_keys.insert(key);
+	for (const char *key : {"Show", "Hide"})
+		fake.obs_keys.insert(key);
+	for (ChangeTarget target : {ChangeTarget::AudioMute, ChangeTarget::AudioVolumeDb, ChangeTarget::AudioMonitoring,
+				    ChangeTarget::AudioSyncOffsetMs, ChangeTarget::AudioTracks})
+		fake.obs_keys.insert(audio_property_key(target));
+	for (int value = 0; value <= 5; ++value)
+		output_setting_value("AdvOut/RescaleFilter", json(std::to_string(value)), ui);
+	for (const char *format : {"flv", "mkv", "mp4", "mov", "hybrid_mp4", "hybrid_mov", "fragmented_mp4",
+				   "fragmented_mov", "mpegts", "hls"})
+		output_setting_value("AdvOut/RecFormat2", json(format), ui);
+	for (int value = 0; value <= 2; ++value)
+		output_setting_value("Video/FPSType", json(std::to_string(value)), ui);
+	output_setting_value("AdvOut/RecTracks", json("63"), ui);
+	encoder_setting_label(true, "", ui);
+	for (const char *file : {"ja-JP.ini", "en-US.ini"}) {
+		const std::set<std::string> keys = locale_keys(file);
+		for (const auto &key : fake.plugin_keys) {
+			if (!keys.count(key))
+				std::printf("missing in %s: %s\n", file, key.c_str());
+			CHECK(keys.count(key));
+		}
+		for (const auto &key : fake.obs_keys) {
+			if (!keys.count("OBS." + key))
+				std::printf("missing in %s: OBS.%s\n", file, key.c_str());
+			CHECK(keys.count("OBS." + key));
+		}
+	}
+}
+
 } // namespace
 
 int main()
@@ -1025,6 +1169,7 @@ int main()
 	test_output_key_and_config_text();
 	test_expected_video();
 	test_log_file_selection();
+	test_display_names();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
