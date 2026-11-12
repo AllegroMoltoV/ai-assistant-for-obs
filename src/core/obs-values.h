@@ -67,4 +67,12 @@ std::string last_lines(const std::string &text, size_t count);
 // 空の行はまとめない。改行は LF と CRLF のどちらでもよく、結果は LF で返す
 std::string collapse_repeated_lines(const std::string &text);
 
+// OBS の色の整数は 0xAABBGGRR の順 (plugins/image-source/color-source.c と libobs の vec4_from_rgba)。
+// 承認の画面とモデルには "#RRGGBB" で見せ、モデルからも "#RRGGBB" か "#RRGGBBAA" で受け取る
+std::string obs_color_hex(long long value);
+// 不透明度 (0-255)
+int obs_color_alpha(long long value);
+// "#RRGGBB" (不透明) か "#RRGGBBAA" を OBS の色の整数にする。形が違えば false
+bool parse_color_hex(const std::string &text, long long &out);
+
 } // namespace aia

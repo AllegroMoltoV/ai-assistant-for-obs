@@ -12,6 +12,8 @@ const std::vector<AddKindInfo> &add_kinds()
 		{AddKind::Crop, "crop", "crop_filter", true},
 		{AddKind::ApplicationAudioCapture, "application_audio_capture", "wasapi_process_output_capture", false},
 		{AddKind::BrowserSource, "browser_source", "browser_source", false},
+		// 色ソースは版 3 が現行。libobs は版を付けた ID で登録する (plugins/image-source/color-source.c)
+		{AddKind::ColorSource, "color_source", "color_source_v3", false},
 	};
 	return kinds;
 }

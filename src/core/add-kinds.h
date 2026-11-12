@@ -7,8 +7,8 @@
 
 namespace aia {
 
-// エージェントが追加できる種類。依頼者の決定で、この 6 つ以外は追加しない
-enum class AddKind { NoiseSuppression, Gain, Compressor, Crop, ApplicationAudioCapture, BrowserSource };
+// エージェントが追加できる種類。依頼者の決定で、この 7 つ以外は追加しない (色ソースは 2026-11-12 に追加)
+enum class AddKind { NoiseSuppression, Gain, Compressor, Crop, ApplicationAudioCapture, BrowserSource, ColorSource };
 
 struct AddKindInfo {
 	AddKind kind;

@@ -177,10 +177,44 @@ std::string property_value_text(obs_property_t *p, const json &value)
 		if (value.is_number())
 			return number_text(value, text_or_empty(obs_property_float_suffix(p)));
 		break;
+	case OBS_PROPERTY_COLOR:
+	case OBS_PROPERTY_COLOR_ALPHA: {
+		// 色は整数のままでは読めないため "#RRGGBB" で見せ、透けるときは不透明度を添える
+		long long color = 0;
+		if (value.is_number_integer())
+			color = value.get<long long>();
+		else if (!value.is_string() || !parse_color_hex(value.get<std::string>(), color))
+			break;
+		std::string out = obs_color_hex(color);
+		const int alpha = obs_color_alpha(color);
+		if (obs_property_get_type(p) == OBS_PROPERTY_COLOR_ALPHA && alpha != 255)
+			out += localized("Value.Opacity", {std::to_string((alpha * 100 + 127) / 255)});
+		return out;
+	}
 	default:
 		break;
 	}
 	return plain_value_text(value, ui);
+}
+
+bool is_color_property(obs_property_t *p)
+{
+	const obs_property_type type = p ? obs_property_get_type(p) : OBS_PROPERTY_INVALID;
+	return type == OBS_PROPERTY_COLOR || type == OBS_PROPERTY_COLOR_ALPHA;
+}
+
+// 色のプロパティに "#RRGGBB" の文字列が来たら、OBS の色の整数に直す。直せない文字列は誤りにする
+bool normalize_color_value(obs_property_t *p, const std::string &key, json &value, std::string &error)
+{
+	if (!is_color_property(p) || !value.is_string())
+		return true;
+	long long color = 0;
+	if (!parse_color_hex(value.get<std::string>(), color)) {
+		error = "the color " + key + " must be \"#RRGGBB\" or \"#RRGGBBAA\"";
+		return false;
+	}
+	value = color;
+	return true;
 }
 
 // 追加する項目の設定を「項目名: 値」の並びにする。設定が無ければ既定の設定と示す
@@ -430,6 +464,10 @@ bool prepare_source_setting(const Change &change, json &entry, json &before, Pro
 		return false;
 	}
 	before = in_settings ? current[change.key] : json();
+	json after = change.value;
+	if (!normalize_color_value(property, change.key, after, error))
+		return false;
+	entry["after"] = after;
 	entry["before_user_set"] = settings && obs_data_has_user_value(settings, change.key.c_str());
 	const std::string name = property_label(property, change.key);
 	item.label = is_filter ? localized("Proposal.FilterSetting", {change.source, change.filter, name})
@@ -929,10 +967,15 @@ bool add_item_now(const json &data, std::string &error)
 		return false;
 	}
 	write_added_mark(source, name, std::string());
-	if (!obs_scene_add(scene, source)) {
+	obs_sceneitem_t *scene_item = obs_scene_add(scene, source);
+	if (!scene_item) {
 		error = "OBS could not add the source to the scene";
 		return false;
 	}
+	// OBS は追加したソースを一番上に置く。色ソースは背景に使うため、一番上に置くと配信の画面を覆ってしまう。
+	// そのため一番下に置く
+	if (kind->kind == AddKind::ColorSource)
+		obs_sceneitem_set_order(scene_item, OBS_ORDER_MOVE_BOTTOM);
 	return true;
 }
 
@@ -1000,6 +1043,29 @@ bool remove_marked_item(const json &data, std::string &error)
 
 // ---------------------------------------------------------------------------
 // 取得
+
+// 色のプロパティの現在の値を "#RRGGBB" (透けるときは "#RRGGBBAA") で返す。モデルが整数の色を読み違えないようにする
+void collect_color_values(obs_properties_t *props, const json &settings, json &out)
+{
+	for (obs_property_t *p = obs_properties_first(props); p; obs_property_next(&p)) {
+		if (obs_property_get_type(p) == OBS_PROPERTY_GROUP) {
+			collect_color_values(obs_property_group_content(p), settings, out);
+			continue;
+		}
+		const std::string key = text_or_empty(obs_property_name(p));
+		if (!is_color_property(p) || !settings.contains(key) || !settings[key].is_number_integer())
+			continue;
+		const long long color = settings[key].get<long long>();
+		std::string text = obs_color_hex(color);
+		const int alpha = obs_color_alpha(color);
+		if (alpha != 255) {
+			char suffix[3];
+			std::snprintf(suffix, sizeof(suffix), "%02X", alpha);
+			text += suffix;
+		}
+		out[key] = text;
+	}
+}
 
 json list_options(obs_properties_t *props)
 {
@@ -1281,11 +1347,17 @@ std::string read_source_details(const std::string &source_name)
 	obs_source_enum_filters(source, collect_filter, &filters);
 	PropertiesPtr props(obs_source_properties(source));
 
+	const json current = data_to_json(settings, true);
+	json colors = json::object();
+	if (props)
+		collect_color_values(props.get(), current, colors);
 	json out = {{"name", source_name},
 		    {"type_id", text_or_empty(obs_source_get_id(source))},
-		    {"settings", data_to_json(settings, true)},
+		    {"settings", current},
 		    {"filters", std::move(filters)},
 		    {"property_options", props ? list_options(props.get()) : json::object()}};
+	if (!colors.empty())
+		out["color_values"] = std::move(colors);
 	return finish_json(out);
 }
 
@@ -1405,8 +1477,17 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 		}
 		item.label = localized("Proposal.AddSource", {parent_name, request.name, type_name});
 	}
+	json settings = request.settings;
+	if (settings.is_object()) {
+		PropertiesPtr props(obs_get_source_properties(kind->obs_id));
+		for (auto it = settings.begin(); it != settings.end(); ++it) {
+			if (!normalize_color_value(obs_properties_get(props.get(), it.key().c_str()), it.key(), it.value(),
+						   result.error))
+				return result;
+		}
+	}
 	item.kind = ProposalItemKind::Add;
-	item.after = add_settings_text(kind->obs_id, request.settings);
+	item.after = add_settings_text(kind->obs_id, settings);
 	// remove_item の引数と同じ形で記録する。追加を元に戻す提案にそのまま使える
 	item.record = {{"kind", kind->is_filter ? "filter" : "source"},
 		       {"source", kind->is_filter ? json(parent_name) : json()},
@@ -1419,7 +1500,7 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 			       {"is_filter", kind->is_filter},
 			       {"parent", parent_name},
 			       {"name", request.name},
-			       {"settings", request.settings}};
+			       {"settings", settings}};
 	result.ok = true;
 	return result;
 }

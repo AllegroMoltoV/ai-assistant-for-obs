@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <map>
 #include <vector>
 
@@ -292,6 +293,50 @@ std::string collapse_repeated_lines(const std::string &text)
 	if (!result.empty())
 		result.pop_back();
 	return result;
+}
+
+std::string obs_color_hex(long long value)
+{
+	const auto v = static_cast<unsigned long long>(value) & 0xFFFFFFFFULL;
+	const unsigned r = static_cast<unsigned>(v & 0xFF);
+	const unsigned g = static_cast<unsigned>((v >> 8) & 0xFF);
+	const unsigned b = static_cast<unsigned>((v >> 16) & 0xFF);
+	char text[8];
+	std::snprintf(text, sizeof(text), "#%02X%02X%02X", r, g, b);
+	return text;
+}
+
+int obs_color_alpha(long long value)
+{
+	return static_cast<int>((static_cast<unsigned long long>(value) >> 24) & 0xFF);
+}
+
+bool parse_color_hex(const std::string &text, long long &out)
+{
+	if ((text.size() != 7 && text.size() != 9) || text[0] != '#')
+		return false;
+	unsigned long long rgba = 0;
+	for (size_t i = 1; i < text.size(); ++i) {
+		const char c = text[i];
+		int digit = -1;
+		if (c >= '0' && c <= '9')
+			digit = c - '0';
+		else if (c >= 'a' && c <= 'f')
+			digit = c - 'a' + 10;
+		else if (c >= 'A' && c <= 'F')
+			digit = c - 'A' + 10;
+		if (digit < 0)
+			return false;
+		rgba = (rgba << 4) | static_cast<unsigned long long>(digit);
+	}
+	if (text.size() == 7)
+		rgba = (rgba << 8) | 0xFF;
+	const unsigned long long r = (rgba >> 24) & 0xFF;
+	const unsigned long long g = (rgba >> 16) & 0xFF;
+	const unsigned long long b = (rgba >> 8) & 0xFF;
+	const unsigned long long a = rgba & 0xFF;
+	out = static_cast<long long>((a << 24) | (b << 16) | (g << 8) | r);
+	return true;
 }
 
 } // namespace aia

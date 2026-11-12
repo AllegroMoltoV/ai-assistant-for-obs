@@ -110,7 +110,7 @@ void test_tools_json()
 	}
 	CHECK(names.size() == 7);
 
-	// add_item の kind の候補が決めた 6 つと一致すること
+	// add_item の kind の候補が決めた 7 つと一致すること (色ソースは 2026-11-12 の依頼者の決定で追加)
 	for (const auto &tool : tools) {
 		if (tool.value("name", "") != kToolAddItem)
 			continue;
@@ -120,7 +120,7 @@ void test_tools_json()
 			listed.insert(kind.get<std::string>());
 		const std::set<std::string> expected = {
 			"noise_suppression",         "gain",          "compressor", "crop",
-			"application_audio_capture", "browser_source"};
+			"application_audio_capture", "browser_source", "color_source"};
 		CHECK(listed == expected);
 		// 入れ子のオブジェクトにも strict の条件がかかる
 	}
@@ -135,13 +135,14 @@ void test_tools_json()
 
 void test_add_kinds()
 {
-	CHECK(add_kinds().size() == 6);
+	CHECK(add_kinds().size() == 7);
 	CHECK(std::string(find_add_kind("noise_suppression")->obs_id) == "noise_suppress_filter_v2");
 	CHECK(std::string(find_add_kind("gain")->obs_id) == "gain_filter");
 	CHECK(std::string(find_add_kind("compressor")->obs_id) == "compressor_filter");
 	CHECK(std::string(find_add_kind("crop")->obs_id) == "crop_filter");
 	CHECK(std::string(find_add_kind("application_audio_capture")->obs_id) == "wasapi_process_output_capture");
 	CHECK(std::string(find_add_kind("browser_source")->obs_id) == "browser_source");
+	CHECK(std::string(find_add_kind("color_source")->obs_id) == "color_source_v3");
 	CHECK(find_add_kind("image_source") == nullptr);
 	CHECK(find_add_kind("scene") == nullptr);
 	CHECK(find_add_kind("") == nullptr);
@@ -1397,6 +1398,18 @@ void test_log_file_selection()
 	CHECK(collapse_repeated_lines("a\nb 'x\nc") == "a\nb 'x\nc");
 	CHECK(collapse_repeated_lines("x\nx") == "x [same message 2 times]");
 	CHECK(collapse_repeated_lines("").empty());
+
+	// OBS の色は 0xAABBGGRR。バイトの順を取り違えると、承認した色と違う色になる
+	CHECK(obs_color_hex(0xFF0000FFLL) == "#FF0000");
+	CHECK(obs_color_hex(0xFFD1D1D1LL) == "#D1D1D1");
+	CHECK(obs_color_hex(0x80FF0000LL) == "#0000FF");
+	CHECK(obs_color_alpha(0x80FF0000LL) == 0x80);
+	long long color = 0;
+	CHECK(parse_color_hex("#FF0000", color) && color == 0xFF0000FFLL);
+	CHECK(parse_color_hex("#00ff0080", color) && color == 0x8000FF00LL);
+	CHECK(!parse_color_hex("red", color));
+	CHECK(!parse_color_hex("#FF00", color));
+	CHECK(!parse_color_hex("#GG0000", color));
 }
 
 // 承認の画面の文言を引くキー。OBS 本体の訳とプラグインの訳を、実行時と同じく別々に引く

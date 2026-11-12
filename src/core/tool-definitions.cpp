@@ -164,7 +164,7 @@ json build_tools_json()
 	tools.push_back(function_tool(
 		kToolAddItem,
 		"Propose adding a noise suppression, gain, compressor or crop filter, an application audio capture "
-		"source, or a browser source. The user must approve before anything is added. Nothing else can be added.",
+		"source, a browser source, or a color source. The user must approve before anything is added. Nothing else can be added.",
 		add_item_schema()));
 	tools.push_back(function_tool(
 		kToolRemoveItem,
