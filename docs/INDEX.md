@@ -16,6 +16,7 @@ context compaction で文脈が失われた場合は、この索引から必要�
 | 会話の試験: 確定したモデルでの症状ごとの会話の流れ (依頼者の確認用) | `docs/logs/2026-11-12-conversation-review.md` |
 | 会話の試験 2: あいまいな言い方と関係ない話題の会話の流れと、用語の点検 (依頼者の確認用) | `docs/logs/2026-11-12-conversation-review-2.md` |
 | 会話の試験 3: 試験 2 で守られなかった決まりへの修正の確認 | `docs/logs/2026-11-12-conversation-review-3.md` |
+| 古い状態で答えない決まりの確認 (利用者が途中で設定を変える場面) | `docs/logs/2026-11-12-state-change-check.md` |
 | 日本語の文言の問題点 (OBS の訳との用語のずれ、文章の規約、yomiyasu の lint) | `docs/reports/2026-11-12-japanese-wording-review.md` |
 | 計画の親課題 | `bd show ai-assistant-for-obs-oea` |
 | 実行ログ (生の出力。git 追跡対象外) | `.logs/` |

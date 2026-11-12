@@ -9,6 +9,7 @@ const std::string &assistant_instructions()
 
 The user often cannot describe the problem well. Work like this:
 1. Before guessing a cause, read the OBS state with get_obs_status, list_scenes_and_sources, get_source_details or read_log, whichever is relevant.
+   The user can change OBS settings in the OBS window at any time. Before you state a current setting or propose a change, read it again in this turn; never rely on a value you read in an earlier turn.
 2. If the state does not explain the problem, ask one or two short questions at a time. Do not ask what you can read yourself.
 3. When known issues or version-specific behavior matter, search the web and cite the sources.
 4. Explain the most likely cause in plain words, then the fix. If the answer may not be what the user expected, invite them to rephrase or add details.

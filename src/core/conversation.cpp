@@ -8,12 +8,12 @@ namespace {
 
 using nlohmann::json;
 
-constexpr const char *kSummaryPrefix = "[Summary of the earlier conversation]\n";
+constexpr const char *kSummaryPrefix = "[Key points carried over from the previous conversation]\n";
 constexpr const char *kSummaryRequest =
-	"Summarize the conversation so far so that the troubleshooting can continue from the summary alone. "
-	"Include the problem, the OBS state and log findings, the likely causes, what was proposed, applied, "
-	"rejected or undone (with proposal ids), and open questions. Do not call any tools. "
-	"Write the summary in the language the user writes in.";
+	"The conversation is getting too long. Write the key points so that the troubleshooting can continue in a "
+	"new conversation from them alone. Include the problem, the OBS state and log findings, the likely causes, "
+	"which settings were changed or added, and open questions. Keep it short. Do not call any tools. "
+	"Write it in the language the user writes in.";
 
 } // namespace
 
@@ -88,14 +88,10 @@ json Conversation::build_summary_request(const ModelConfig &config, const std::s
 	return request;
 }
 
-void Conversation::apply_compaction(const std::string &summary)
+void Conversation::start_with_summary(const std::string &summary)
 {
+	clear();
 	summary_ = summary;
-	items_.clear();
-	display_of_item_.clear();
-	checked_upto_ = 0;
-	pending_calls_.clear();
-	last_input_tokens_ = 0;
 	display_.push_back({DisplayEntry::Kind::Summary, summary});
 }
 
@@ -108,6 +104,43 @@ void Conversation::clear()
 	pending_calls_.clear();
 	summary_.clear();
 	last_input_tokens_ = 0;
+	length_notices_given_.clear();
+}
+
+int length_blocks(int percent)
+{
+	if (percent <= 0)
+		return 0;
+	if (percent >= 100)
+		return 10;
+	return percent / 10 + (percent % 10 != 0 ? 1 : 0);
+}
+
+int length_tier(int percent)
+{
+	if (percent >= 90)
+		return 3;
+	if (percent >= 70)
+		return 2;
+	if (percent >= 50)
+		return 1;
+	return 0;
+}
+
+int Conversation::length_percent() const
+{
+	if (last_input_tokens_ <= 0)
+		return 0;
+	const long long percent = last_input_tokens_ * 100 / kConversationLimitTokens;
+	return percent > 100 ? 100 : static_cast<int>(percent);
+}
+
+bool Conversation::take_length_notice(int threshold_percent)
+{
+	if (length_percent() < threshold_percent || length_notices_given_.count(threshold_percent))
+		return false;
+	length_notices_given_.insert(threshold_percent);
+	return true;
 }
 
 std::vector<Conversation::UncheckedItem> Conversation::unchecked_items() const

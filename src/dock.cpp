@@ -8,7 +8,6 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QFrame>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -35,6 +34,9 @@ QString utf8(const std::string &value)
 {
 	return QString::fromStdString(value);
 }
+
+// ドックの最小幅 (px)。候補のチップを 1 列に並べたとき、長い文言が見切れない幅
+constexpr int kDockMinimumWidth = 300;
 
 // 候補のチップ。調査で多かった困りごとの順。キーは data/locale の Chip.*
 constexpr const char *kChipKeys[] = {"Chip.NoVideo", "Chip.NoGameAudio", "Chip.NoMic", "Chip.Echo",
@@ -80,6 +82,14 @@ Dock::Dock(ToolHost &host, QWidget *parent)
 	  transport_(std::make_unique<QtTransport>()),
 	  session_(std::make_unique<Session>(*transport_, host))
 {
+	// 縦に長いドックとして使う前提で、候補のチップや入力欄が見切れない幅を保つ
+	setMinimumWidth(kDockMinimumWidth);
+	// 話し手と提案を色で見分けられるようにする。色は OBS のテーマのパレットから取り、明暗の両方で読めるようにする
+	setStyleSheet("QFrame#aiaUser { background: palette(alternate-base); border-radius: 6px; }"
+		      "QFrame#aiaAssistant { background: palette(base); border-radius: 6px; }"
+		      "QFrame#aiaProposal { border: 2px solid palette(highlight); border-radius: 6px; }"
+		      "QFrame#aiaSummary { border: 1px dashed palette(mid); border-radius: 6px; }");
+
 	scroll_ = new QScrollArea(this);
 	scroll_->setWidgetResizable(true);
 	scroll_->setFrameShape(QFrame::NoFrame);
@@ -87,6 +97,11 @@ Dock::Dock(ToolHost &host, QWidget *parent)
 	history_layout_ = new QVBoxLayout(history_);
 	history_layout_->setAlignment(Qt::AlignTop);
 	scroll_->setWidget(history_);
+	// 新しい部品の配置が決まり、スクロールの範囲が広がった時点で末尾へ送る
+	connect(scroll_->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int, int max) {
+		if (scroll_to_end_)
+			scroll_->verticalScrollBar()->setValue(max);
+	});
 
 	status_label_ = new QLabel(this);
 	cancel_button_ = new QPushButton(text("Dock.Cancel"), this);
@@ -95,38 +110,39 @@ Dock::Dock(ToolHost &host, QWidget *parent)
 	status_row->addWidget(status_label_, 1);
 	status_row->addWidget(cancel_button_);
 
-	// 手本と同じく、量が上限の約 80% に達したら理由と実行のボタンを付けて圧縮を勧める
-	compact_bar_ = card(this, "aiaCompactBar");
-	auto *compact_label = wrapped_label(text("Compact.Suggest"), compact_bar_);
-	auto *compact_button = new QPushButton(text("Compact.Run"), compact_bar_);
-	connect(compact_button, &QPushButton::clicked, this, [this] { session_->compact(); });
-	auto *compact_layout = new QHBoxLayout(compact_bar_);
-	compact_layout->addWidget(compact_label, 1);
-	compact_layout->addWidget(compact_button);
+	carry_over_button_ = new QPushButton(text("Carry.Run"), this);
+	carry_over_button_->setToolTip(text("Carry.Tooltip"));
+	connect(carry_over_button_, &QPushButton::clicked, this, [this] { session_->carry_over(); });
+
+	limit_label_ = wrapped_label(text("Notice.LengthLimit"), this);
+	limit_label_->setStyleSheet("color: #d9534f;");
 
 	transient_label_ = new QLabel(this);
 	transient_label_->setWordWrap(true);
 	transient_label_->setStyleSheet("color: #d9534f;");
 	transient_label_->hide();
 
-	input_ = new QPlainTextEdit(this);
-	input_->setPlaceholderText(text("Dock.InputPlaceholder"));
+	input_ = new ChatInput(text("Dock.InputPlaceholder"), this);
 	input_->setMaximumHeight(80);
 	input_->installEventFilter(this);
+	gauge_ = new LengthGauge(this);
+	gauge_->setFixedHeight(80);
 	send_button_ = new QPushButton(text("Dock.Send"), this);
 	connect(send_button_, &QPushButton::clicked, this, [this] { submit(); });
 	auto *input_row = new QHBoxLayout();
 	input_row->addWidget(input_, 1);
+	input_row->addWidget(gauge_);
 	input_row->addWidget(send_button_, 0, Qt::AlignBottom);
 
-	// 応答の誤りの可能性と、AI に送るデータの範囲を入力欄の近くに示す
+	// 応答の誤りの可能性と、AI に送るデータの範囲を入力欄の近くに示す。本文と同じ色と大きさで読めるようにする
 	auto *disclaimer = wrapped_label(text("Dock.Disclaimer"), this);
-	disclaimer->setStyleSheet("color: palette(mid); font-size: 11px;");
 
 	auto *settings_button = new QPushButton(text("Dock.Settings"), this);
 	// 設定画面は非モーダルで開き、配信の操作を妨げない
 	connect(settings_button, &QPushButton::clicked, this, [this] { (new SettingsDialog(window()))->show(); });
-	auto *help_button = new QPushButton(text("Dock.Help"), this);
+	auto *help_button = new QPushButton(QStringLiteral("?"), this);
+	help_button->setToolTip(text("Dock.Help"));
+	help_button->setFixedWidth(help_button->sizeHint().height());
 	connect(help_button, &QPushButton::clicked, this, [this] { session_->show_help(); });
 	auto *clear_button = new QPushButton(text("Dock.Clear"), this);
 	connect(clear_button, &QPushButton::clicked, this, [this] { session_->clear(); });
@@ -139,7 +155,8 @@ Dock::Dock(ToolHost &host, QWidget *parent)
 	auto *layout = new QVBoxLayout(this);
 	layout->addWidget(scroll_, 1);
 	layout->addLayout(status_row);
-	layout->addWidget(compact_bar_);
+	layout->addWidget(limit_label_);
+	layout->addWidget(carry_over_button_);
 	layout->addWidget(transient_label_);
 	layout->addLayout(input_row);
 	layout->addWidget(disclaimer);
@@ -180,24 +197,7 @@ void Dock::submit()
 	const QString value = input_->toPlainText().trimmed();
 	if (value.isEmpty())
 		return;
-	// 手本のスラッシュのコマンド。モデルには送らない
-	if (value == QStringLiteral("/help")) {
-		input_->clear();
-		session_->show_help();
-		return;
-	}
-	if (value == QStringLiteral("/compact")) {
-		input_->clear();
-		if (!session_->conversation().can_compact())
-			show_transient(text("Compact.Nothing"));
-		session_->compact();
-		return;
-	}
-	if (value == QStringLiteral("/clear")) {
-		input_->clear();
-		session_->clear();
-		return;
-	}
+	// コマンドは持たない (依頼者の決定)。入力はすべて相談として送る
 	send_text(value);
 }
 
@@ -229,41 +229,49 @@ void Dock::rebuild()
 		history_layout_->addWidget(build_entry(entry));
 
 	const SessionState state = session_->state();
-	const bool busy = state == SessionState::Waiting || state == SessionState::Compacting;
+	const Conversation &conversation = session_->conversation();
+	const bool busy = state == SessionState::Waiting || state == SessionState::CarryingOver;
 	if (state == SessionState::Waiting)
 		status_label_->setText(text("Dock.Thinking"));
-	else if (state == SessionState::Compacting)
-		status_label_->setText(text("Compact.Running"));
+	else if (state == SessionState::CarryingOver)
+		status_label_->setText(text("Carry.Running"));
 	else if (state == SessionState::AwaitingApproval)
 		status_label_->setText(text("Dock.AwaitingApproval"));
 	else
 		status_label_->clear();
 	status_label_->setVisible(state != SessionState::Idle);
 	cancel_button_->setVisible(busy);
-	compact_bar_->setVisible(state == SessionState::Idle && session_->conversation().should_suggest_compaction());
-	send_button_->setEnabled(state == SessionState::Idle);
 
-	// 新しい内容が見えるよう、配置が終わってから末尾へ送る
-	QTimer::singleShot(0, this,
-			   [this] { scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum()); });
+	const bool at_limit = conversation.at_length_limit();
+	gauge_->set_percent(conversation.length_percent());
+	carry_over_button_->setVisible(state == SessionState::Idle && conversation.can_carry_over());
+	limit_label_->setVisible(at_limit);
+	input_->setEnabled(!at_limit);
+	send_button_->setEnabled(state == SessionState::Idle && !at_limit);
+
+	// 新しい内容が見えるよう、配置が決まってスクロールの範囲が広がった時点で末尾へ送る (rangeChanged)。
+	// 範囲が変わらない作り直しにも備え、イベントの処理の後にも一度送る
+	scroll_to_end_ = true;
+	QTimer::singleShot(0, this, [this] {
+		scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum());
+		QTimer::singleShot(200, this, [this] { scroll_to_end_ = false; });
+	});
 }
 
 QWidget *Dock::build_empty_state()
 {
-	// 悩みを一度で言葉にできなくても、選ぶだけで始められるようにする
+	// できることとできないことを最初から見せ、悩みを一度で言葉にできなくても、選ぶだけで始められるようにする
 	auto *box = new QWidget(history_);
 	auto *layout = new QVBoxLayout(box);
 	layout->addWidget(wrapped_label(text("Dock.Welcome"), box));
-	auto *grid = new QGridLayout();
-	int index = 0;
+	layout->addWidget(build_help());
+	// 縦に長いドックで見切れないよう、チップは 1 列に並べる
 	for (const char *key : kChipKeys) {
 		auto *chip = new QPushButton(text(key), box);
 		const QString value = text(key);
 		connect(chip, &QPushButton::clicked, this, [this, value] { send_text(value); });
-		grid->addWidget(chip, index / 2, index % 2);
-		++index;
+		layout->addWidget(chip);
 	}
-	layout->addLayout(grid);
 	return box;
 }
 
@@ -279,6 +287,11 @@ QWidget *Dock::build_entry(const DisplayEntry &entry)
 		auto *label = wrapped_label(utf8(entry.text), frame);
 		label->setTextFormat(Qt::PlainText);
 		layout->addWidget(label);
+		// 自分の発言も、言い直しや別の場所への貼り付けのためにコピーできるようにする
+		auto *copy = new QPushButton(text("Dock.Copy"), frame);
+		const QString body = utf8(entry.text);
+		connect(copy, &QPushButton::clicked, this, [body] { QApplication::clipboard()->setText(body); });
+		layout->addWidget(copy, 0, Qt::AlignRight);
 		return frame;
 	}
 	case DisplayEntry::Kind::Assistant:
@@ -290,7 +303,7 @@ QWidget *Dock::build_entry(const DisplayEntry &entry)
 	case DisplayEntry::Kind::Summary: {
 		auto *frame = card(history_, "aiaSummary");
 		auto *layout = new QVBoxLayout(frame);
-		auto *title = new QLabel(text("Compact.SummaryTitle"), frame);
+		auto *title = new QLabel(text("Carry.SummaryTitle"), frame);
 		title->setStyleSheet("font-weight: bold;");
 		layout->addWidget(title);
 		auto *label = wrapped_label(utf8(entry.text), frame);

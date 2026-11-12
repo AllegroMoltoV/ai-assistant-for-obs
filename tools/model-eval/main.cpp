@@ -211,6 +211,18 @@ public:
 			sources_.insert(audio.value("name", std::string()));
 	}
 
+	// 利用者が OBS の画面で設定を変えた場面を模す。場面のファイルの "tool_results_before_reply" の
+	// "<返答の番号>" にある道具の結果で、その返答を送る前に置き換える
+	void change_before_reply(size_t reply_index)
+	{
+		const json changes = scenario_.value("tool_results_before_reply", json::object());
+		const auto it = changes.find(std::to_string(reply_index));
+		if (it == changes.end() || !it->is_object())
+			return;
+		for (const auto &item : it->items())
+			results_[item.key()] = item.value();
+	}
+
 	void stop_outputs()
 	{
 		outputs_active_ = false;
@@ -621,6 +633,7 @@ json run_scenario(const OpenAiClient &client, const EvalConfig &config, const Sc
 		}
 		if (static_cast<int>(reply_index) == stop_after_reply)
 			obs.stop_outputs();
+		obs.change_before_reply(reply_index);
 		const std::string reply = replies[reply_index++].get<std::string>();
 		input.push_back(user_message_item(reply));
 		record["events"].push_back({{"type", "user"}, {"text", reply}});

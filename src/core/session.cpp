@@ -33,7 +33,7 @@ void Session::changed()
 
 void Session::send_user_message(const std::string &text)
 {
-	if (state_ != SessionState::Idle || text.empty())
+	if (state_ != SessionState::Idle || text.empty() || conversation_.at_length_limit())
 		return;
 	conversation_.add_user_message(text);
 	steps_ = 0;
@@ -44,6 +44,13 @@ void Session::start_request()
 {
 	if (steps_ >= kMaxStepsPerTurn) {
 		conversation_.add_notice(kNoticeTooManySteps);
+		state_ = SessionState::Idle;
+		changed();
+		return;
+	}
+	// 道具の往復の途中でも、上限の手前に達したら送らない。次の応答で上限を超えるのを防ぐ
+	if (conversation_.at_length_limit()) {
+		conversation_.add_notice(kNoticeLengthLimit);
 		state_ = SessionState::Idle;
 		changed();
 		return;
@@ -129,6 +136,13 @@ void Session::handle_response(long http_status, const json &body, const std::str
 		conversation_.set_last_input_tokens(parsed.usage.input_tokens);
 	if (parsed.status == "incomplete")
 		conversation_.add_notice(kNoticeIncomplete, parsed.incomplete_reason);
+	// いきなり上限に達したと感じさせないよう、段階ごとに一度だけ知らせる
+	if (conversation_.take_length_notice(kLengthNoticeNearPercent)) {
+		conversation_.take_length_notice(kLengthNoticeLongPercent);
+		conversation_.add_notice(kNoticeLengthNear);
+	} else if (conversation_.take_length_notice(kLengthNoticeLongPercent)) {
+		conversation_.add_notice(kNoticeLengthLong);
+	}
 
 	for (const auto &call : parsed.function_calls)
 		run_function_call(call);
@@ -244,11 +258,11 @@ void Session::undo(int proposal_id)
 	changed();
 }
 
-void Session::compact()
+void Session::carry_over()
 {
-	if (state_ != SessionState::Idle || !conversation_.can_compact())
+	if (state_ != SessionState::Idle || !conversation_.can_carry_over())
 		return;
-	state_ = SessionState::Compacting;
+	state_ = SessionState::CarryingOver;
 	changed();
 	check_then([this] {
 		const int generation = generation_;
@@ -267,22 +281,25 @@ void Session::handle_summary(long http_status, const json &body, const std::stri
 	const ParsedResponse parsed = parse_response(http_status, body);
 	if (!parsed.ok || parsed.text.empty()) {
 		if (parsed.ok)
-			conversation_.add_notice(kNoticeCompactFailed);
+			conversation_.add_notice(kNoticeCarryOverFailed);
 		else
 			add_error_notice(http_status, parsed, transport_error);
 		state_ = SessionState::Idle;
 		changed();
 		return;
 	}
-	conversation_.apply_compaction(parsed.text);
-	conversation_.add_notice(kNoticeCompacted);
+	// 新しい会話は新しいセッションのため、実行の記録も消す
+	conversation_.start_with_summary(parsed.text);
+	proposals_.clear();
+	steps_ = 0;
+	conversation_.add_notice(kNoticeCarriedOver);
 	state_ = SessionState::Idle;
 	changed();
 }
 
 void Session::cancel()
 {
-	if (state_ != SessionState::Waiting && state_ != SessionState::Compacting)
+	if (state_ != SessionState::Waiting && state_ != SessionState::CarryingOver)
 		return;
 	++generation_;
 	transport_.cancel();
@@ -300,7 +317,7 @@ void Session::show_help()
 void Session::clear()
 {
 	++generation_;
-	if (state_ == SessionState::Waiting || state_ == SessionState::Compacting)
+	if (state_ == SessionState::Waiting || state_ == SessionState::CarryingOver)
 		transport_.cancel();
 	conversation_.clear();
 	proposals_.clear();

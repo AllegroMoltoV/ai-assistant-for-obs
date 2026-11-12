@@ -1,6 +1,8 @@
 #pragma once
 
+#include "chat-input.h"
 #include "core/session.h"
+#include "length-gauge.h"
 #include "qt-transport.h"
 
 #include <QWidget>
@@ -47,10 +49,16 @@ private:
 	QVBoxLayout *history_layout_ = nullptr;
 	QLabel *status_label_ = nullptr;
 	QPushButton *cancel_button_ = nullptr;
-	QWidget *compact_bar_ = nullptr;
+	// 会話の長さが約 50% に達してから出す、要点を引き継いで新しい会話を始めるボタン
+	QPushButton *carry_over_button_ = nullptr;
+	// 上限の手前で送信を止めたときの理由
+	QLabel *limit_label_ = nullptr;
 	QLabel *transient_label_ = nullptr;
-	QPlainTextEdit *input_ = nullptr;
+	ChatInput *input_ = nullptr;
+	LengthGauge *gauge_ = nullptr;
 	QPushButton *send_button_ = nullptr;
+	// 作り直した後、配置が決まってから末尾へ送るための印
+	bool scroll_to_end_ = false;
 };
 
 } // namespace aia

@@ -564,52 +564,84 @@ ParsedResponse response_with_text(const char *text)
 	return r;
 }
 
-void test_conversation_compaction()
+long long tokens_for_percent(int percent)
+{
+	return kConversationLimitTokens * percent / 100;
+}
+
+// 会話の長さのゲージ: 10% 刻みのブロックと、50%・70%・90% の色の段階
+void test_length_gauge()
+{
+	CHECK(length_blocks(0) == 0);
+	CHECK(length_blocks(1) == 1);
+	CHECK(length_blocks(10) == 1);
+	CHECK(length_blocks(11) == 2);
+	CHECK(length_blocks(95) == 10);
+	CHECK(length_blocks(100) == 10);
+	CHECK(length_tier(49) == 0);
+	CHECK(length_tier(50) == 1);
+	CHECK(length_tier(69) == 1);
+	CHECK(length_tier(70) == 2);
+	CHECK(length_tier(89) == 2);
+	CHECK(length_tier(90) == 3);
+}
+
+void test_conversation_length_and_carry_over()
 {
 	Conversation conv;
 	conv.add_user_message("映らない");
 	conv.add_response(response_with_call("call_1"));
 	CHECK(conv.has_pending_calls());
-	// 関数の呼び出しに結果を返すまでは圧縮しない
-	CHECK(!conv.can_compact());
 	conv.add_tool_result("call_1", "get_obs_status", "{\"fps\":60}");
 	CHECK(!conv.has_pending_calls());
 	conv.add_response(response_with_text("原因はキャプチャーの方法です"));
 	CHECK(conv.request_items().size() == 5);
 
-	// 約 80% で圧縮を勧める
-	conv.set_last_input_tokens(kCompactionSuggestTokens - 1);
-	CHECK(!conv.should_suggest_compaction());
-	conv.set_last_input_tokens(kCompactionSuggestTokens);
-	CHECK(conv.should_suggest_compaction());
-	CHECK(conv.can_compact());
+	// 要点を引き継ぐボタンは約 50% から
+	conv.set_last_input_tokens(tokens_for_percent(49));
+	CHECK(conv.length_percent() == 49);
+	CHECK(!conv.can_carry_over());
+	conv.set_last_input_tokens(tokens_for_percent(50));
+	CHECK(conv.can_carry_over());
+	CHECK(!conv.at_length_limit());
+
+	// 段階の知らせは一度だけ
+	conv.set_last_input_tokens(tokens_for_percent(75));
+	CHECK(conv.take_length_notice(kLengthNoticeLongPercent));
+	CHECK(!conv.take_length_notice(kLengthNoticeLongPercent));
+	CHECK(!conv.take_length_notice(kLengthNoticeNearPercent));
+
+	// 上限の手前で送信を止める
+	conv.set_last_input_tokens(tokens_for_percent(kLengthBlockPercent) - 1000);
+	CHECK(!conv.at_length_limit());
+	conv.set_last_input_tokens(tokens_for_percent(kLengthBlockPercent));
+	CHECK(conv.at_length_limit());
 
 	const json summary_request = conv.build_summary_request(ModelConfig{}, "inst", build_tools_json());
 	CHECK(summary_request["tool_choice"] == "none");
 	CHECK(summary_request["input"].size() == 6);
 
-	const size_t shown_before = conv.display().size();
-	conv.apply_compaction("要約: 画面が映らない相談");
-	// 画面の履歴は残し、要約を足す
-	CHECK(conv.display().size() == shown_before + 1);
-	CHECK(conv.display().back().kind == DisplayEntry::Kind::Summary);
-	CHECK(!conv.should_suggest_compaction());
-
-	// モデルには要約と、それ以降の会話だけを渡す
+	// 要点を引き継ぐと新しい会話になる。画面は引き継いだ要点だけになり、長さと知らせも初めからになる
+	conv.start_with_summary("要点: 画面が映らない相談");
+	CHECK(conv.display().size() == 1);
+	CHECK(conv.display()[0].kind == DisplayEntry::Kind::Summary);
+	CHECK(conv.length_percent() == 0);
+	CHECK(!conv.at_length_limit());
 	auto items = conv.request_items();
 	CHECK(items.size() == 1);
-	CHECK(contains_word(items[0]["content"].get<std::string>(), "要約: 画面が映らない相談"));
+	CHECK(contains_word(items[0]["content"].get<std::string>(), "要点: 画面が映らない相談"));
 	conv.add_user_message("まだ映らない");
 	items = conv.request_items();
 	CHECK(items.size() == 2);
-	CHECK(items[1]["content"] == "まだ映らない");
 	CHECK(!contains_word(json(items).dump(), "call_1"));
+	conv.set_last_input_tokens(tokens_for_percent(76));
+	CHECK(conv.take_length_notice(kLengthNoticeLongPercent));
 
-	// /clear は画面とモデルに渡す内容の両方を消す
+	// 「新しい会話」は画面とモデルに渡す内容の両方を消す
 	conv.clear();
 	CHECK(conv.display().empty());
 	CHECK(conv.request_items().empty());
-	CHECK(!conv.can_compact());
+	CHECK(!conv.can_carry_over());
 }
 
 // 決めた応答を順に返す偽の送り先。async が真なら、done を呼ばずに保持する
@@ -899,29 +931,60 @@ void test_session_limits_and_errors()
 	}
 }
 
-void test_session_compaction_and_cancel()
+bool has_notice(const Session &session, const char *key)
+{
+	for (const auto &entry : session.conversation().display()) {
+		if (entry.kind == DisplayEntry::Kind::Notice && entry.text == key)
+			return true;
+	}
+	return false;
+}
+
+void test_session_length_and_cancel()
 {
 	FakeTransport transport;
 	FakeHost host;
 	Session session(transport, host);
-	transport.replies.push_back({200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}", 50000), ""});
-	json big = FakeTransport::text_body("長い相談の答え");
-	big["usage"]["input_tokens"] = kCompactionSuggestTokens + 10;
-	transport.replies.push_back({200, big, ""});
+	transport.replies.push_back(
+		{200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}", tokens_for_percent(60)), ""});
+	json long_body = FakeTransport::text_body("長い相談の答え");
+	long_body["usage"]["input_tokens"] = tokens_for_percent(91);
+	transport.replies.push_back({200, long_body, ""});
 	session.send_user_message("最初の相談");
-	CHECK(session.conversation().should_suggest_compaction());
+	// 75% を飛ばして 90% を越えたときは、90% の知らせだけを出す
+	CHECK(has_notice(session, kNoticeLengthNear));
+	CHECK(!has_notice(session, kNoticeLengthLong));
+	CHECK(session.conversation().can_carry_over());
 
-	transport.replies.push_back({200, FakeTransport::text_body("要約の本文"), ""});
-	session.compact();
+	// 要点を引き継ぐと、実行の記録も消えた新しい会話になる
+	transport.replies.push_back({200, FakeTransport::text_body("要点の本文"), ""});
+	session.carry_over();
 	CHECK(session.state() == SessionState::Idle);
 	CHECK(transport.requests.back()["tool_choice"] == "none");
-	CHECK(!session.conversation().should_suggest_compaction());
+	CHECK(session.conversation().length_percent() == 0);
+	CHECK(session.proposals().all().empty());
+	CHECK(has_notice(session, kNoticeCarriedOver));
 
 	transport.replies.push_back({200, FakeTransport::text_body("続きの答え"), ""});
 	session.send_user_message("続き");
 	const json &input = transport.requests.back()["input"];
 	CHECK(input.size() == 2);
-	CHECK(contains_word(input[0]["content"].get<std::string>(), "要約の本文"));
+	CHECK(contains_word(input[0]["content"].get<std::string>(), "要点の本文"));
+
+	{
+		// 上限の手前では送らない。道具の往復の途中で達したときも止める
+		FakeTransport t;
+		FakeHost h;
+		Session s(t, h);
+		t.replies.push_back(
+			{200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}", tokens_for_percent(96)), ""});
+		s.send_user_message("相談");
+		CHECK(t.requests.size() == 1);
+		CHECK(has_notice(s, kNoticeLengthLimit));
+		CHECK(s.state() == SessionState::Idle);
+		s.send_user_message("もう一度");
+		CHECK(t.requests.size() == 1);
+	}
 
 	// 取り消した後に届いた古い応答は捨てる
 	transport.async = true;
@@ -1255,12 +1318,13 @@ int main()
 	test_decide_change();
 	test_proposal_book();
 	test_changes_audio_immediately();
-	test_conversation_compaction();
+	test_length_gauge();
+	test_conversation_length_and_carry_over();
 	test_session_read_tool_loop();
 	test_session_approval();
 	test_session_reject_and_failures();
 	test_session_limits_and_errors();
-	test_session_compaction_and_cancel();
+	test_session_length_and_cancel();
 	test_session_moderation();
 	test_monitoring_values();
 	test_track_mixers();

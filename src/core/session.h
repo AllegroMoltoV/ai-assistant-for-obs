@@ -46,8 +46,8 @@ enum class SessionState {
 	Waiting,
 	// 操作の提案への利用者の判断を待っている
 	AwaitingApproval,
-	// 要約の応答を待っている
-	Compacting,
+	// 要点を引き継ぐための応答を待っている
+	CarryingOver,
 };
 
 // 画面の知らせの種類。文言は画面の側で翻訳する
@@ -56,13 +56,17 @@ inline constexpr const char *kNoticeNetworkError = "Error.Network";
 inline constexpr const char *kNoticeInvalidKey = "Error.InvalidKey";
 inline constexpr const char *kNoticeTooManySteps = "Error.TooManySteps";
 inline constexpr const char *kNoticeIncomplete = "Error.Incomplete";
-inline constexpr const char *kNoticeCompacted = "Notice.Compacted";
-inline constexpr const char *kNoticeCompactFailed = "Error.CompactFailed";
+inline constexpr const char *kNoticeCarriedOver = "Notice.CarriedOver";
+inline constexpr const char *kNoticeCarryOverFailed = "Error.CarryOverFailed";
+// 会話の長さの段階の知らせ (約 75 % と約 90 %) と、上限の手前で送信を止めた知らせ
+inline constexpr const char *kNoticeLengthLong = "Notice.LengthLong";
+inline constexpr const char *kNoticeLengthNear = "Notice.LengthNear";
+inline constexpr const char *kNoticeLengthLimit = "Notice.LengthLimit";
 inline constexpr const char *kNoticeUndone = "Notice.Undone";
 inline constexpr const char *kNoticeUndoFailed = "Error.UndoFailed";
 inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
-// できること・できないこと・質問の例 (/help)。画面の側で中身を描く
+// できること・できないこと・質問の例。「?」のボタンで会話に出す。画面の側で中身を描く
 inline constexpr const char *kNoticeHelp = "Notice.Help";
 // 送る前の検査で問題ありとされ、その内容を送らなかった
 inline constexpr const char *kNoticeWithheld = "Notice.Withheld";
@@ -81,12 +85,12 @@ public:
 	void approve(int proposal_id);
 	void reject(int proposal_id);
 	void undo(int proposal_id);
-	// 手動の圧縮 (/compact) と、勧めのボタンからの圧縮
-	void compact();
+	// 要点を引き継いで新しい会話を始める。会話の長さが約 50 % に達してから使える
+	void carry_over();
 	// 画面とモデルに渡す内容の両方を消す (/clear)
 	void clear();
 	void cancel();
-	// /help の表示を画面の履歴に足す。モデルには送らない
+	// ヘルプ文を画面の履歴に足す (「?」のボタン)。モデルには送らない
 	void show_help();
 
 	SessionState state() const { return state_; }

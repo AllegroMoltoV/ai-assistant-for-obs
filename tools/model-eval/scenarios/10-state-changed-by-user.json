@@ -1,0 +1,336 @@
+{
+  "title": "途中で利用者が設定を変える (古い状態で答えない)",
+  "first_message": "配信がカクカクするって言われた。ゲームは普通",
+  "user_replies": [
+    "いまは止めてる。グラボは RTX の 3060",
+    "設定画面で自分で NVENC に変えてみた。これで大丈夫?",
+    "ありがとう"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": false,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "x264",
+    "SimpleOutput/RecEncoder": "x264",
+    "SimpleOutput/Preset": "medium",
+    "SimpleOutput/VBitrate": "6000"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 23H2 (build 22631.4460)",
+      "video": {
+        "base_resolution": "1920x1080",
+        "output_resolution": "1920x1080",
+        "fps": "60"
+      },
+      "output": {
+        "mode": "Simple",
+        "settings": {
+          "SimpleOutput/StreamEncoder": "x264",
+          "SimpleOutput/Preset": "medium",
+          "SimpleOutput/VBitrate": 6000,
+          "SimpleOutput/ABitrate": 160,
+          "SimpleOutput/RecQuality": "Stream",
+          "SimpleOutput/RecFormat2": "hybrid_mp4"
+        },
+        "video_encoder_choices": [
+          {
+            "value": "x264",
+            "label": "ソフトウェア (x264)"
+          },
+          {
+            "value": "nvenc",
+            "label": "ハードウェア (NVENC, H.264)"
+          },
+          {
+            "value": "nvenc_hevc",
+            "label": "ハードウェア (NVENC, HEVC)"
+          }
+        ]
+      },
+      "active": {
+        "streaming": false,
+        "recording": false,
+        "replay_buffer": false,
+        "virtual_camera": false
+      },
+      "stats": {
+        "active_fps": 60.0,
+        "average_frame_render_time_ms": 1.9,
+        "frames_missed_due_to_rendering_lag": "21 / 108032 (0.0%)",
+        "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)",
+        "dropped_frames_network": "0 / 0 (0.0%)",
+        "cpu_usage_percent": 17.2,
+        "memory_mb": 590,
+        "note": "stats of the last stream are in the log"
+      }
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "ゲーム",
+      "scenes": [
+        {
+          "name": "ゲーム",
+          "items": [
+            {
+              "source": "ゲームキャプチャ",
+              "type": "game_capture",
+              "visible": true
+            },
+            {
+              "source": "Webカメラ",
+              "type": "dshow_input",
+              "visible": true
+            },
+            {
+              "source": "コメント",
+              "type": "browser_source",
+              "visible": true
+            }
+          ]
+        }
+      ],
+      "audio_sources": [
+        {
+          "name": "デスクトップ音声",
+          "type": "wasapi_output_capture",
+          "volume_db": 0.0,
+          "muted": false,
+          "monitoring": "off",
+          "sync_offset_ms": 0,
+          "tracks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "name": "マイク",
+          "type": "wasapi_input_capture",
+          "volume_db": 0.0,
+          "muted": false,
+          "monitoring": "off",
+          "sync_offset_ms": 0,
+          "tracks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    "get_source_details": {
+      "ゲームキャプチャ": {
+        "name": "ゲームキャプチャ",
+        "type": "game_capture",
+        "active": true,
+        "width": 1920,
+        "height": 1080,
+        "settings": {
+          "capture_mode": "window",
+          "window": "Apex Legends:Respawn001:r5apex_dx12.exe",
+          "capture_cursor": true,
+          "capture_audio": false
+        },
+        "filters": [],
+        "property_options": {
+          "capture_mode": {
+            "description": "モード",
+            "options": [
+              {
+                "label": "フルスクリーンアプリケーションをキャプチャ",
+                "value": "any_fullscreen"
+              },
+              {
+                "label": "特定のウィンドウをキャプチャ",
+                "value": "window"
+              },
+              {
+                "label": "ホットキーで前面のウィンドウをキャプチャ",
+                "value": "hotkey"
+              }
+            ]
+          },
+          "window": {
+            "description": "ウィンドウ",
+            "options": [
+              {
+                "label": "",
+                "value": ""
+              },
+              {
+                "label": "[r5apex_dx12.exe]: Apex Legends",
+                "value": "Apex Legends:Respawn001:r5apex_dx12.exe"
+              },
+              {
+                "label": "[obs64.exe]: OBS 33.0.1 - プロファイル: 無題 - シーン: 無題",
+                "value": "OBS 33.0.1 - プロファイル#3A 無題 - シーン#3A 無題:Qt683QWindowIcon:obs64.exe"
+              }
+            ]
+          },
+          "priority": {
+            "description": "ウィンドウの一致優先順位",
+            "options": [
+              {
+                "label": "ウィンドウのタイトルに一致する必要があります",
+                "value": 1
+              },
+              {
+                "label": "タイトルに一致、そうでなければ同じ種類のウィンドウを見つける",
+                "value": 0
+              },
+              {
+                "label": "タイトルに一致、そうでなければ同じ実行可能ファイルのウィンドウを見つける",
+                "value": 2
+              }
+            ]
+          },
+          "hook_rate": {
+            "description": "フック速度",
+            "options": [
+              {
+                "label": "低速",
+                "value": 0
+              },
+              {
+                "label": "通常 (推奨)",
+                "value": 1
+              },
+              {
+                "label": "高速",
+                "value": 2
+              },
+              {
+                "label": "最速",
+                "value": 3
+              }
+            ]
+          }
+        }
+      }
+    },
+    "read_log": [
+      "20:30:11.201: CPU Name: AMD Ryzen 5 3600 6-Core Processor",
+      "20:30:11.201: Physical Cores: 6, Logical Cores: 12",
+      "20:30:11.330: OBS 33.0.1 (64-bit, windows)",
+      "20:30:11.402: Available Video Adapters: ",
+      "20:30:11.405: \tAdapter 0: NVIDIA GeForce RTX 3060",
+      "20:30:11.405: \t  Dedicated VRAM: 12616466432 (11.8 GiB)",
+      "20:30:11.405: \t  Driver Version: 32.0.15.6614",
+      "20:30:11.410: Loading up D3D11 on adapter NVIDIA GeForce RTX 3060 (0)",
+      "20:30:11.470: video settings reset:",
+      "20:30:11.470: \tbase resolution:   1920x1080",
+      "20:30:11.470: \toutput resolution: 1920x1080",
+      "20:30:11.470: \tfps:               60/1",
+      "20:30:12.502: [NVENC] Test process: OK",
+      "20:30:12.880: ==== Startup complete ===============================================",
+      "20:31:40.010: [x264 encoder: 'simple_video_stream'] preset: medium",
+      "20:31:40.010: [x264 encoder: 'simple_video_stream'] settings:",
+      "20:31:40.010: \trate_control: CBR",
+      "20:31:40.010: \tbitrate:      6000",
+      "20:31:40.010: \tbuffer size:  6000",
+      "20:31:40.010: \tcrf:          23",
+      "20:31:40.010: \tfps_num:      60",
+      "20:31:40.010: \tfps_den:      1",
+      "20:31:40.010: \twidth:        1920",
+      "20:31:40.010: \theight:       1080",
+      "20:31:40.010: \tkeyint:       250",
+      "20:31:40.020: [rtmp stream: 'simple_stream'] Connecting to RTMP URL rtmp://live-tyo.twitch.tv/app...",
+      "20:31:40.402: ==== Streaming Start ===============================================",
+      "20:46:52.118: [rtmp stream: 'simple_stream'] User stopped the stream",
+      "20:46:52.118: Output 'simple_stream': stopping",
+      "20:46:52.118: Output 'simple_stream': Total frames output: 41322",
+      "20:46:52.118: Output 'simple_stream': Total drawn frames: 54710 (54721 attempted)",
+      "20:46:52.118: Output 'simple_stream': Number of lagged frames due to rendering lag/stalls: 11 (0.0%)",
+      "20:46:52.120: ==== Streaming Stop ================================================",
+      "20:46:52.123: Video stopped, number of skipped frames due to encoding lag: 13398/54710 (24.5%)"
+    ]
+  },
+  "judge": {
+    "cause": "最初は x264 のエンコードの遅れ。利用者が 2 回目の返答の前に設定画面で映像エンコーダを NVENC (ハードウェア (NVENC, H.264)) に変えている。2 回目の返答の後、AI は状態を読み直し、NVENC に変わっていることを確かめて答える。x264 のままだと答えてはいけない。",
+    "cause_keywords": [
+      [
+        "エンコード"
+      ],
+      [
+        "NVENC"
+      ]
+    ],
+    "must_read": [
+      [
+        "get_obs_status"
+      ],
+      [
+        "read_log"
+      ]
+    ],
+    "good_proposals": [],
+    "forbidden_proposals": [
+      {
+        "tool": "change_settings",
+        "target": "output_setting",
+        "key": "SimpleOutput/StreamEncoder"
+      }
+    ]
+  },
+  "tool_results_before_reply": {
+    "1": {
+      "get_obs_status": {
+        "obs_version": "33.0.1",
+        "os": "Windows 11 Version 23H2 (build 22631.4460)",
+        "video": {
+          "base_resolution": "1920x1080",
+          "output_resolution": "1920x1080",
+          "fps": "60"
+        },
+        "output": {
+          "mode": "Simple",
+          "settings": {
+            "SimpleOutput/StreamEncoder": "nvenc",
+            "SimpleOutput/Preset": "medium",
+            "SimpleOutput/VBitrate": 6000,
+            "SimpleOutput/ABitrate": 160,
+            "SimpleOutput/RecQuality": "Stream",
+            "SimpleOutput/RecFormat2": "hybrid_mp4",
+            "SimpleOutput/NVENCPreset2": "p5"
+          },
+          "video_encoder_choices": [
+            {
+              "value": "x264",
+              "label": "ソフトウェア (x264)"
+            },
+            {
+              "value": "nvenc",
+              "label": "ハードウェア (NVENC, H.264)"
+            },
+            {
+              "value": "nvenc_hevc",
+              "label": "ハードウェア (NVENC, HEVC)"
+            }
+          ]
+        },
+        "active": {
+          "streaming": false,
+          "recording": false,
+          "replay_buffer": false,
+          "virtual_camera": false
+        },
+        "stats": {
+          "active_fps": 60.0,
+          "average_frame_render_time_ms": 1.9,
+          "frames_missed_due_to_rendering_lag": "21 / 108032 (0.0%)",
+          "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)",
+          "dropped_frames_network": "0 / 0 (0.0%)",
+          "cpu_usage_percent": 17.2,
+          "memory_mb": 590,
+          "note": "stats of the last stream are in the log"
+        }
+      }
+    }
+  }
+}
