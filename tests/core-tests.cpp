@@ -941,6 +941,25 @@ void test_session_read_tool_loop()
 	CHECK(session.conversation().display().back().text == "原因はエンコードの負荷です");
 }
 
+// 応答に本文も道具の呼び出しも無いときと、出力の上限で切れたときも、画面に知らせを出す。
+// 依頼者の実機の確認で、ソースの一覧を頼んだら何も表示されずに終わった
+void test_session_empty_or_cut_reply()
+{
+	FakeTransport transport;
+	FakeHost host;
+	Session session(transport, host);
+	transport.replies.push_back({200, json({{"status", "completed"}, {"output", json::array()}}), ""});
+	session.send_user_message("ソースを全部出して");
+	CHECK(session.state() == SessionState::Idle);
+	CHECK(session.conversation().display().back().text == kNoticeEmptyReply);
+
+	transport.replies.push_back(
+		{200, json::parse(R"({"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]})"),
+		 ""});
+	session.send_user_message("もう一度");
+	CHECK(session.conversation().display().back().text == kNoticeIncomplete);
+}
+
 void test_session_approval()
 {
 	FakeTransport transport;
@@ -1577,6 +1596,7 @@ int main()
 	test_length_gauge();
 	test_conversation_length_and_carry_over();
 	test_session_read_tool_loop();
+	test_session_empty_or_cut_reply();
 	test_session_approval();
 	test_session_reject_and_failures();
 	test_session_remove();

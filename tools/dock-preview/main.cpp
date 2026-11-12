@@ -262,7 +262,7 @@ int main(int argc, char **argv)
 	int failed = 0;
 
 	FakeTools tools;
-	aia::Dock dock(tools, std::make_unique<ScriptedTransport>(echo_script()));
+	aia::Dock dock(tools, locale, std::make_unique<ScriptedTransport>(echo_script()));
 	dock.show();
 
 	// 空の会話の画面。OBS の初期の配置に近い縦長と、最小幅と、広い幅

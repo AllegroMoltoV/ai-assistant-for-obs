@@ -13,7 +13,8 @@ constexpr const char *kSummaryRequest =
 	"The conversation is getting too long. Write the key points so that the troubleshooting can continue in a "
 	"new conversation from them alone. Include the problem, the OBS state and log findings, the likely causes, "
 	"which settings were changed or added, and open questions. Keep it short. Do not call any tools. "
-	"Write it in the language the user writes in.";
+	"Write it in the same language as your earlier replies in this conversation, which follow the language "
+	"rule in the instructions. Do not switch to the language of this request.";
 
 } // namespace
 

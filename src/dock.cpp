@@ -75,7 +75,7 @@ QString proposal_state_text(ProposalState state)
 
 } // namespace
 
-Dock::Dock(ToolHost &host, std::unique_ptr<Transport> transport, QWidget *parent)
+Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport> transport, QWidget *parent)
 	: QWidget(parent),
 	  transport_(transport ? std::move(transport) : std::make_unique<QtTransport>()),
 	  session_(std::make_unique<Session>(*transport_, host))
@@ -166,6 +166,8 @@ Dock::Dock(ToolHost &host, std::unique_ptr<Transport> transport, QWidget *parent
 	layout->addWidget(disclaimer);
 	layout->addLayout(tool_row);
 
+	// AI の回答を、利用者が OBS で選んだ表示言語に合わせる
+	session_->set_locale(locale);
 	session_->set_on_changed([this] { rebuild(); });
 	rebuild();
 }
@@ -473,7 +475,9 @@ QWidget *Dock::build_notice(const DisplayEntry &entry)
 		value += QStringLiteral(" (") + utf8(entry.detail) + QStringLiteral(")");
 	auto *label = wrapped_label(value, history_);
 	label->setTextFormat(Qt::PlainText);
-	label->setStyleSheet("color: palette(mid);");
+	// 誤りの知らせは見落とさないよう警告の色で出す。palette(mid) は暗いテーマでほとんど読めない
+	if (entry.text.rfind("Error.", 0) == 0)
+		label->setStyleSheet("color: #d9534f;");
 	return label;
 }
 

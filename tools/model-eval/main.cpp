@@ -6,6 +6,7 @@
 //   aia-model-eval run <scenarios のフォルダー> <出力のフォルダー> <model:effort[:noweb]> [--only 接頭辞]
 //                      [--budget 米ドル] [--env .env のパス]
 //   aia-model-eval report <scenarios のフォルダー> <出力のフォルダー>
+//   aia-model-eval language [.env のパス]  回答と要約の言語を、OBS の表示言語と利用者の言語の 4 通りで確かめる
 // run は 1 つの構成で場面を順に回し、<出力>/runs/<構成>__<場面>.json に会話と usage を書く。
 // report は runs の JSON を読み、自動の判定と集計を <出力>/outputs.md と stats.md に書く。
 
@@ -15,6 +16,7 @@
 #endif
 
 #include "core/change-request.h"
+#include "core/conversation.h"
 #include "core/instructions.h"
 #include "core/output-settings-policy.h"
 #include "core/responses.h"
@@ -505,7 +507,9 @@ json run_scenario(const OpenAiClient &client, const EvalConfig &config, const Sc
 	std::string end_reason = "request_limit";
 
 	for (int index = 0; index < kMaxRequestsPerScenario; ++index) {
-		const json body = build_request(model_config, assistant_instructions(), tools, input);
+		// プラグインと同じく、共通の指示文に回答の言語の指示を足す。試験の台本は日本語の利用者を想定する
+		const json body = build_request(
+			model_config, assistant_instructions() + "\n\n" + language_instruction("ja-JP"), tools, input);
 		HttpResult http;
 		// 送り直す前の失敗。利用者が待つ時間と、送り直しの頻度を後から数えるため残す
 		json failed_attempts = json::array();
@@ -1199,6 +1203,75 @@ int command_report(int argc, char **argv)
 	return 0;
 }
 
+// ひらがなかカタカナを含むとき日本語とみなす
+bool looks_japanese(const std::string &text)
+{
+	// UTF-8 で U+3040..U+30FF は E3 81 80 .. E3 83 BF
+	for (size_t i = 0; i + 1 < text.size(); ++i) {
+		const auto a = static_cast<unsigned char>(text[i]);
+		const auto b = static_cast<unsigned char>(text[i + 1]);
+		if (a == 0xE3 && b >= 0x81 && b <= 0x83)
+			return true;
+	}
+	return false;
+}
+
+// 回答と要約の言語が、OBS の表示言語と利用者が書く言語の組み合わせに合うことを確かめる。
+// 期待: 利用者が書いた言語で答える。OBS の表示言語と同じなら当然それに一致する
+int command_language(int argc, char **argv)
+{
+	const fs::path env_path = argc >= 3 ? fs::path(argv[2]) : fs::path(".env");
+	const std::string key = read_api_key(env_path);
+	if (key.empty()) {
+		std::fprintf(stderr, "OPENAI_API_KEY was not found in the env file\n");
+		return 2;
+	}
+	struct Case {
+		const char *locale;
+		bool user_japanese;
+		const char *user;
+		const char *assistant;
+	};
+	const Case cases[] = {
+		{"ja-JP", true, "配信で自分の声が二重に聞こえると言われました", "マイクの音声モニタリングの設定を確かめましょう。"},
+		{"en-US", false, "Viewers say my voice sounds doubled on stream", "Let's check the audio monitoring of your mic."},
+		{"ja-JP", false, "Viewers say my voice sounds doubled on stream", "Let's check the audio monitoring of your mic."},
+		{"en-US", true, "配信で自分の声が二重に聞こえると言われました", "マイクの音声モニタリングの設定を確かめましょう。"},
+	};
+	const OpenAiClient client(key, nullptr);
+	const ModelConfig config;
+	const json no_tools = json::array();
+	int mismatches = 0;
+	for (const auto &c : cases) {
+		const std::string instructions = assistant_instructions() + "\n\n" + language_instruction(c.locale);
+		Conversation conversation;
+		conversation.add_user_message(c.user);
+		json reply_request = build_request(config, instructions, no_tools, conversation.request_items());
+		const HttpResult reply = client.post_responses(reply_request);
+		const ParsedResponse parsed_reply = parse_response(reply.http_status, reply.body);
+
+		ParsedResponse assistant;
+		assistant.ok = true;
+		assistant.text = c.assistant;
+		assistant.output_items.push_back({{"type", "message"},
+						  {"role", "assistant"},
+						  {"content", json::array({{{"type", "output_text"}, {"text", c.assistant}}})}});
+		conversation.add_response(assistant);
+		const HttpResult summary =
+			client.post_responses(conversation.build_summary_request(config, instructions, no_tools));
+		const ParsedResponse parsed_summary = parse_response(summary.http_status, summary.body);
+
+		const bool reply_ok = parsed_reply.ok && looks_japanese(parsed_reply.text) == c.user_japanese;
+		const bool summary_ok = parsed_summary.ok && looks_japanese(parsed_summary.text) == c.user_japanese;
+		mismatches += (reply_ok ? 0 : 1) + (summary_ok ? 0 : 1);
+		std::printf("== locale=%s user=%s reply=%s summary=%s\n-- reply: %s\n-- summary: %s\n", c.locale,
+			    c.user_japanese ? "ja" : "en", reply_ok ? "OK" : "NG", summary_ok ? "OK" : "NG",
+			    parsed_reply.text.c_str(), parsed_summary.text.c_str());
+	}
+	std::printf("mismatches=%d\n", mismatches);
+	return mismatches == 0 ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1207,6 +1280,8 @@ int main(int argc, char **argv)
 		return command_run(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "report") == 0)
 		return command_report(argc, argv);
-	std::fprintf(stderr, "usage: aia-model-eval run|report ...\n");
+	if (argc >= 2 && std::strcmp(argv[1], "language") == 0)
+		return command_language(argc, argv);
+	std::fprintf(stderr, "usage: aia-model-eval run|report|language ...\n");
 	return 2;
 }

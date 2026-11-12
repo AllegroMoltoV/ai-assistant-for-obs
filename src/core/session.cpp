@@ -23,6 +23,12 @@ Session::Session(Transport &transport, ToolHost &host, ModelConfig config)
 	  config_(std::move(config)),
 	  tools_(build_tools_json())
 {
+	set_locale(std::string());
+}
+
+void Session::set_locale(const std::string &locale)
+{
+	instructions_ = assistant_instructions() + "\n\n" + language_instruction(locale);
 }
 
 void Session::changed()
@@ -61,7 +67,7 @@ void Session::start_request()
 	check_then([this] {
 		const int generation = generation_;
 		const json request =
-			build_request(config_, assistant_instructions(), tools_, conversation_.request_items());
+			build_request(config_, instructions_, tools_, conversation_.request_items());
 		transport_.send(Endpoint::Responses, request,
 				[this, generation](long status, const json &body, const std::string &error) {
 					if (generation != generation_)
@@ -134,8 +140,12 @@ void Session::handle_response(long http_status, const json &body, const std::str
 	conversation_.add_response(parsed);
 	if (parsed.usage.input_tokens > 0)
 		conversation_.set_last_input_tokens(parsed.usage.input_tokens);
-	if (parsed.status == "incomplete")
-		conversation_.add_notice(kNoticeIncomplete, parsed.incomplete_reason);
+	if (parsed.status == "incomplete" && parsed.incomplete_reason == "max_output_tokens")
+		conversation_.add_notice(kNoticeIncomplete);
+	else if (parsed.status == "incomplete")
+		conversation_.add_notice(kNoticeIncompleteOther, parsed.incomplete_reason);
+	else if (parsed.text.empty() && parsed.function_calls.empty())
+		conversation_.add_notice(kNoticeEmptyReply);
 	// いきなり上限に達したと感じさせないよう、段階ごとに一度だけ知らせる
 	if (conversation_.take_length_notice(kLengthNoticeNearPercent)) {
 		conversation_.take_length_notice(kLengthNoticeLongPercent);
@@ -257,7 +267,7 @@ void Session::carry_over()
 	changed();
 	check_then([this] {
 		const int generation = generation_;
-		const json request = conversation_.build_summary_request(config_, assistant_instructions(), tools_);
+		const json request = conversation_.build_summary_request(config_, instructions_, tools_);
 		transport_.send(Endpoint::Responses, request,
 				[this, generation](long status, const json &body, const std::string &error) {
 					if (generation != generation_)

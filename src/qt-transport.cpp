@@ -48,10 +48,28 @@ void QtTransport::send(Endpoint endpoint, const nlohmann::json &request, Done do
 		const OpenAiClient client(std::move(key), cancel.get());
 		const bool moderation = endpoint == Endpoint::Moderations;
 		HttpResult result = moderation ? client.post_moderations(request) : client.post_responses(request);
-		// 本文はログに書かず、処理の時間と状態だけを残す
+		// 本文はログに書かず、処理の時間と状態だけを残す。通信の失敗の理由 (libcurl の説明) と、
+		// 応答の状態と途中で切れた理由は、画面に何も出なかった場合の原因を追えるよう残す
+		std::string detail;
+		if (!result.transport_error.empty())
+			detail += " transport_error=\"" + result.transport_error + "\"";
+		// 型の違う値で例外を投げないよう、文字列のときだけ読む
+		const auto string_at = [](const nlohmann::json &object, const char *key) {
+			const auto found = object.find(key);
+			return found != object.end() && found->is_string() ? found->get<std::string>() : std::string();
+		};
+		if (result.body.is_object()) {
+			const std::string status = string_at(result.body, "status");
+			if (!status.empty())
+				detail += " response_status=" + status;
+			const auto incomplete = result.body.find("incomplete_details");
+			if (incomplete != result.body.end() && incomplete->is_object())
+				detail += " incomplete_reason=" + string_at(*incomplete, "reason");
+		}
+		if (cancel->load())
+			detail += " cancelled";
 		obs_log(LOG_INFO, "%s status=%ld elapsed_ms=%.0f%s", moderation ? "moderations" : "responses",
-			result.http_status, result.elapsed_ms,
-			result.transport_error.empty() ? "" : " transport_error");
+			result.http_status, result.elapsed_ms, detail.c_str());
 		if (cancel->load())
 			return;
 		post_to_main_thread([done = std::move(done), result = std::move(result), alive] {

@@ -64,7 +64,7 @@ void register_dock()
 	if (!main_window)
 		return;
 
-	auto *dock = new aia::Dock(g_tool_host);
+	auto *dock = new aia::Dock(g_tool_host, obs_get_locale());
 	dock->setObjectName(kDockId);
 	if (!obs_frontend_add_dock_by_id(kDockId, obs_module_text("Dock.Title"), dock)) {
 		obs_log(LOG_ERROR, "failed to add dock");

@@ -55,7 +55,12 @@ inline constexpr const char *kNoticeHttpError = "Error.Http";
 inline constexpr const char *kNoticeNetworkError = "Error.Network";
 inline constexpr const char *kNoticeInvalidKey = "Error.InvalidKey";
 inline constexpr const char *kNoticeTooManySteps = "Error.TooManySteps";
+// 出力の上限で回答が切れた
 inline constexpr const char *kNoticeIncomplete = "Error.Incomplete";
+// 出力の上限以外の理由で回答が切れた。理由を補足に出す
+inline constexpr const char *kNoticeIncompleteOther = "Error.IncompleteOther";
+// 応答に本文も道具の呼び出しも無かった。画面に何も出ないまま終わるのを防ぐ
+inline constexpr const char *kNoticeEmptyReply = "Error.EmptyReply";
 inline constexpr const char *kNoticeCarriedOver = "Notice.CarriedOver";
 inline constexpr const char *kNoticeCarryOverFailed = "Error.CarryOverFailed";
 // 会話の長さの段階の知らせ (約 75 % と約 90 %) と、上限の手前で送信を止めた知らせ
@@ -90,6 +95,9 @@ public:
 	// ヘルプ文を画面の履歴に足す (「?」のボタン)。モデルには送らない
 	void show_help();
 
+	// 回答の言語の基準にする OBS の表示言語 (例: ja-JP)
+	void set_locale(const std::string &locale);
+
 	SessionState state() const { return state_; }
 	const Conversation &conversation() const { return conversation_; }
 	const ProposalBook &proposals() const { return proposals_; }
@@ -115,6 +123,8 @@ private:
 	ToolHost &host_;
 	ModelConfig config_;
 	nlohmann::json tools_;
+	// 共通の指示文に回答の言語の指示を足したもの
+	std::string instructions_;
 	Conversation conversation_;
 	ProposalBook proposals_;
 	SessionState state_ = SessionState::Idle;

@@ -20,8 +20,10 @@ namespace aia {
 // 相談のチャットのドック。表示は Session の会話の履歴から毎回作り直す
 class Dock : public QWidget {
 public:
+	// locale は OBS の表示言語 (例: ja-JP)。AI の回答の言語の基準にする。
 	// transport を省くと OpenAI へ送る QtTransport を使う。開発用の画面の確認の道具は、模した応答を返す送り先を渡す
-	explicit Dock(ToolHost &host, std::unique_ptr<Transport> transport = nullptr, QWidget *parent = nullptr);
+	Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport> transport = nullptr,
+	     QWidget *parent = nullptr);
 	~Dock() override;
 
 protected:

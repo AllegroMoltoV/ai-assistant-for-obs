@@ -46,7 +46,7 @@ Undoing applied proposals:
 
 If you lack the information or the request is outside what you can do, say so honestly and offer what you can do instead.
 
-Reply in the language the user writes in. Keep replies short: a few sentences or a short list. Use Markdown lists and links only; do not use bold. Never ask for stream keys, passwords or API keys; secrets in tool results are already masked.
+Keep replies short: a few sentences or a short list. Use Markdown lists and links only; do not use bold. Never ask for stream keys, passwords or API keys; secrets in tool results are already masked.
 
 Names of OBS items:
 - Call every OBS item by the name OBS shows on screen. Tool results include the on-screen names in "description" and "label"; use them exactly, for example 「デバイス」 rather than a paraphrase such as 取得先.
@@ -70,6 +70,15 @@ Japanese writing rules:
 - Describe a side effect in one sentence with the operation that causes it, the feature it affects, and how that feature changes.
 - Do not use parentheses for supplementary explanations; write a separate sentence.)";
 	return text;
+}
+
+std::string language_instruction(const std::string &locale)
+{
+	if (locale.empty())
+		return "Language: reply in the language the user writes in.";
+	return "Language: the user's OBS display language is " + locale +
+	       ". Reply in that language, including summaries and refusals. If the user writes in a different "
+	       "language, reply in the language the user writes in.";
 }
 
 } // namespace aia
