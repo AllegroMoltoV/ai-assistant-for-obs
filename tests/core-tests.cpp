@@ -1358,6 +1358,26 @@ void test_log_file_selection()
 	CHECK(last_lines("a\r\nb\r\nc", 2) == "b\nc");
 	CHECK(last_lines("a\nb", 300) == "a\nb");
 	CHECK(last_lines("", 300).empty());
+
+	// 依頼者の PC のログで末尾 300 行のうち 117 行を占めた、ブラウザソースの同じエラーの繰り返し。
+	// 時刻と引用符の中の名前が違っても 1 行にまとめ、最後に現れた位置に回数と最初の時刻を添える
+	const std::string repeated = "10:00:00.000: [obs-browser: 'A'] WS Closed\r\n"
+				     "10:00:01.000: Output 'simple_stream': stopping\r\n"
+				     "10:00:02.500: [obs-browser: 'B'] WS Closed\r\n"
+				     "\n"
+				     "10:00:03.000: \n"
+				     "10:00:04.000: [obs-browser: 'A'] WS Closed\n"
+				     "\n";
+	CHECK(collapse_repeated_lines(repeated) ==
+	      "10:00:01.000: Output 'simple_stream': stopping\n"
+	      "\n"
+	      "10:00:03.000: \n"
+	      "10:00:04.000: [obs-browser: 'A'] WS Closed [same message 3 times, first at 10:00:00.000]\n"
+	      "");
+	// 繰り返しの無いログと時刻の無い行は、そのまま返す
+	CHECK(collapse_repeated_lines("a\nb 'x\nc") == "a\nb 'x\nc");
+	CHECK(collapse_repeated_lines("x\nx") == "x [same message 2 times]");
+	CHECK(collapse_repeated_lines("").empty());
 }
 
 // 承認の画面の文言を引くキー。OBS 本体の訳とプラグインの訳を、実行時と同じく別々に引く

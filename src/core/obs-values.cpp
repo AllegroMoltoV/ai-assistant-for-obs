@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
+#include <vector>
 
 namespace aia {
 
@@ -186,6 +188,109 @@ std::string last_lines(const std::string &text, size_t count)
 	}
 	std::string result = text.substr(start, end - start);
 	result.erase(std::remove(result.begin(), result.end(), '\r'), result.end());
+	return result;
+}
+
+namespace {
+
+// "HH:MM:SS.mmm: " の長さ
+constexpr size_t kLogTimePrefixLength = 14;
+
+bool has_log_time_prefix(const std::string &line)
+{
+	if (line.size() < kLogTimePrefixLength)
+		return false;
+	for (size_t i = 0; i < 12; ++i) {
+		const char c = line[i];
+		const bool digit = c >= '0' && c <= '9';
+		const bool separator = (i == 2 || i == 5) ? c == ':' : (i == 8 ? c == '.' : false);
+		if (!(i == 2 || i == 5 || i == 8 ? separator : digit))
+			return false;
+	}
+	return line[12] == ':' && line[13] == ' ';
+}
+
+std::string normalize_log_line(const std::string &line)
+{
+	const std::string body = has_log_time_prefix(line) ? line.substr(kLogTimePrefixLength) : line;
+	std::string result;
+	result.reserve(body.size());
+	for (size_t i = 0; i < body.size(); ++i) {
+		if (body[i] != '\'') {
+			result += body[i];
+			continue;
+		}
+		const size_t close = body.find('\'', i + 1);
+		if (close == std::string::npos) {
+			result.append(body, i, std::string::npos);
+			break;
+		}
+		result += "'*'";
+		i = close;
+	}
+	return result;
+}
+
+std::vector<std::string> split_lines(const std::string &text)
+{
+	std::vector<std::string> lines;
+	size_t start = 0;
+	while (start < text.size()) {
+		size_t end = text.find('\n', start);
+		if (end == std::string::npos)
+			end = text.size();
+		std::string line = text.substr(start, end - start);
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		lines.push_back(std::move(line));
+		start = end + 1;
+	}
+	return lines;
+}
+
+} // namespace
+
+std::string collapse_repeated_lines(const std::string &text)
+{
+	const std::vector<std::string> lines = split_lines(text);
+	std::vector<std::string> keys(lines.size());
+	struct Group {
+		size_t count = 0;
+		size_t first = 0;
+		size_t last = 0;
+	};
+	std::map<std::string, Group> groups;
+	for (size_t i = 0; i < lines.size(); ++i) {
+		keys[i] = normalize_log_line(lines[i]);
+		if (keys[i].find_first_not_of(" \t") == std::string::npos)
+			continue;
+		Group &group = groups[keys[i]];
+		if (group.count == 0)
+			group.first = i;
+		group.last = i;
+		++group.count;
+	}
+
+	std::string result;
+	for (size_t i = 0; i < lines.size(); ++i) {
+		const auto found = groups.find(keys[i]);
+		if (found == groups.end() || found->second.count == 1) {
+			result += lines[i];
+			result += '\n';
+			continue;
+		}
+		const Group &group = found->second;
+		if (i != group.last)
+			continue;
+		result += lines[i];
+		result += " [same message " + std::to_string(group.count) + " times";
+		const std::string &first = lines[group.first];
+		if (has_log_time_prefix(first))
+			result += ", first at " + first.substr(0, 12);
+		result += "]\n";
+	}
+	if (!result.empty())
+		result.pop_back();
 	return result;
 }
 

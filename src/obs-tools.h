@@ -18,7 +18,7 @@ void stop_cpu_usage_monitor();
 std::string read_obs_status();
 std::string read_scenes_and_sources();
 std::string read_source_details(const std::string &source_name);
-// 現在のログファイルの末尾 300 行
+// 現在のログファイルの、繰り返しの行をまとめた後の末尾 300 行
 std::string read_obs_log();
 
 // 出力の稼働状態。obs_frontend_*_active() と obs_video_active() から作る

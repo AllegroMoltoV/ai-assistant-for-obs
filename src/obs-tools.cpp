@@ -1311,7 +1311,7 @@ std::string read_obs_log()
 	BPtr<char> content = os_quick_read_utf8_file((std::string(dir.Get()) + "/" + latest).c_str());
 	if (!content)
 		return "The OBS log file could not be read: " + latest;
-	return limit_tail(mask_secrets_in_text(last_lines(content.Get(), kLogLines)));
+	return limit_tail(mask_secrets_in_text(last_lines(collapse_repeated_lines(content.Get()), kLogLines)));
 }
 
 OutputActivity current_output_activity()

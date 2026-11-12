@@ -62,4 +62,9 @@ std::string pick_latest_log_file(const std::vector<std::string> &names);
 // 末尾の count 行を返す。改行は LF と CRLF のどちらでもよく、最後の空行は数えない
 std::string last_lines(const std::string &text, size_t count);
 
+// 先頭の時刻 "HH:MM:SS.mmm: " と、引用符 '...' で囲んだ名前を除くと同じ文になる行を、最後に現れた位置の 1 行にまとめる。
+// まとめた行の末尾には回数と最初の時刻を添える。同じエラーの繰り返しで、診断に役立つ行が末尾の範囲から押し出されるのを防ぐ。
+// 空の行はまとめない。改行は LF と CRLF のどちらでもよく、結果は LF で返す
+std::string collapse_repeated_lines(const std::string &text);
+
 } // namespace aia
