@@ -1,6 +1,7 @@
 #include "session.h"
 
 #include "instructions.h"
+#include "moderation.h"
 #include "tool-definitions.h"
 
 namespace aia {
@@ -49,14 +50,52 @@ void Session::start_request()
 	}
 	++steps_;
 	state_ = SessionState::Waiting;
-	const int generation = generation_;
-	const json request = build_request(config_, assistant_instructions(), tools_, conversation_.request_items());
 	changed();
-	transport_.send(request, [this, generation](long status, const json &body, const std::string &error) {
-		if (generation != generation_)
-			return;
-		handle_response(status, body, error);
+	check_then([this] {
+		const int generation = generation_;
+		const json request =
+			build_request(config_, assistant_instructions(), tools_, conversation_.request_items());
+		transport_.send(Endpoint::Responses, request,
+				[this, generation](long status, const json &body, const std::string &error) {
+					if (generation != generation_)
+						return;
+					handle_response(status, body, error);
+				});
 	});
+}
+
+void Session::check_then(std::function<void()> next)
+{
+	const auto unchecked = conversation_.unchecked_items();
+	if (unchecked.empty()) {
+		next();
+		return;
+	}
+	std::vector<std::string> texts;
+	for (const auto &item : unchecked)
+		texts.push_back(item.text);
+	const int generation = generation_;
+	transport_.send(Endpoint::Moderations, build_moderation_request(texts),
+			[this, generation, unchecked, next](long status, const json &body, const std::string &error) {
+				if (generation != generation_)
+					return;
+				const ModerationResult result = parse_moderation(status, body, unchecked.size());
+				if (!result.ok) {
+					conversation_.add_notice(kNoticeModerationFailed,
+								 error.empty() ? std::to_string(status) : error);
+					state_ = SessionState::Idle;
+					changed();
+					return;
+				}
+				for (size_t i = 0; i < unchecked.size(); ++i) {
+					if (!result.flagged[i])
+						continue;
+					conversation_.withhold(unchecked[i].item_index);
+					conversation_.add_notice(kNoticeWithheld);
+				}
+				conversation_.mark_all_checked();
+				next();
+			});
 }
 
 void Session::add_error_notice(long http_status, const ParsedResponse &parsed, const std::string &transport_error)
@@ -210,13 +249,16 @@ void Session::compact()
 	if (state_ != SessionState::Idle || !conversation_.can_compact())
 		return;
 	state_ = SessionState::Compacting;
-	const int generation = generation_;
-	const json request = conversation_.build_summary_request(config_, assistant_instructions(), tools_);
 	changed();
-	transport_.send(request, [this, generation](long status, const json &body, const std::string &error) {
-		if (generation != generation_)
-			return;
-		handle_summary(status, body, error);
+	check_then([this] {
+		const int generation = generation_;
+		const json request = conversation_.build_summary_request(config_, assistant_instructions(), tools_);
+		transport_.send(Endpoint::Responses, request,
+				[this, generation](long status, const json &body, const std::string &error) {
+					if (generation != generation_)
+						return;
+					handle_summary(status, body, error);
+				});
 	});
 }
 

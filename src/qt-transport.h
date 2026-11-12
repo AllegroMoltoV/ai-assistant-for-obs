@@ -15,7 +15,7 @@ public:
 	QtTransport() = default;
 	~QtTransport() override;
 
-	void send(const nlohmann::json &request, Done done) override;
+	void send(Endpoint endpoint, const nlohmann::json &request, Done done) override;
 	void cancel() override;
 
 private:

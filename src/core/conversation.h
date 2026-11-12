@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -71,9 +72,22 @@ public:
 	// 画面とモデルに渡す内容の両方を消す
 	void clear();
 
+	// 送る前の検査の対象。まだ検査していない利用者の発言と道具の結果
+	struct UncheckedItem {
+		size_t item_index;
+		std::string text;
+	};
+	std::vector<UncheckedItem> unchecked_items() const;
+	void mark_all_checked() { checked_upto_ = items_.size(); }
+	// 検査で問題ありとされた内容を、送らない旨の文に差し替える。画面の「送った内容」も差し替える
+	void withhold(size_t item_index);
+
 private:
 	std::vector<nlohmann::json> items_;
 	std::vector<DisplayEntry> display_;
+	// items_ の番号から、その内容を見せる display_ の番号への対応
+	std::map<size_t, size_t> display_of_item_;
+	size_t checked_upto_ = 0;
 	std::set<std::string> pending_calls_;
 	std::string summary_;
 	long long last_input_tokens_ = 0;

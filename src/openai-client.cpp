@@ -9,6 +9,7 @@ namespace aia {
 namespace {
 
 constexpr const char *kResponsesUrl = "https://api.openai.com/v1/responses";
+constexpr const char *kModerationsUrl = "https://api.openai.com/v1/moderations";
 constexpr long kConnectTimeoutSeconds = 10;
 // Web 検索と推論を含む応答は数十秒かかることがあるため、流用元の 30 秒から延ばす
 constexpr long kTimeoutSeconds = 180;
@@ -30,6 +31,16 @@ int check_cancel(void *user, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
 
 HttpResult OpenAiClient::post_responses(const nlohmann::json &request) const
 {
+	return post(kResponsesUrl, request);
+}
+
+HttpResult OpenAiClient::post_moderations(const nlohmann::json &request) const
+{
+	return post(kModerationsUrl, request);
+}
+
+HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request) const
+{
 	HttpResult result;
 
 	CURL *curl = curl_easy_init();
@@ -44,7 +55,7 @@ HttpResult OpenAiClient::post_responses(const nlohmann::json &request) const
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 	headers = curl_slist_append(headers, ("Authorization: Bearer " + api_key_).c_str());
 
-	curl_easy_setopt(curl, CURLOPT_URL, kResponsesUrl);
+	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));

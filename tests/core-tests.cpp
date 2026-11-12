@@ -3,6 +3,7 @@
 #include "core/add-kinds.h"
 #include "core/change-request.h"
 #include "core/conversation.h"
+#include "core/moderation.h"
 #include "core/obs-values.h"
 #include "core/output-settings-policy.h"
 #include "core/proposals.h"
@@ -618,13 +619,26 @@ public:
 	};
 	std::deque<Reply> replies;
 	std::vector<json> requests;
+	// 検査の要求と、検査の応答。応答が無ければ、すべて問題なしを返す
+	std::vector<json> moderation_requests;
+	std::deque<Reply> moderation_replies;
 	bool async = false;
 	Done held;
 	int cancels = 0;
 
-	void send(const json &request, Done done) override
+	void send(Endpoint endpoint, const json &request, Done done) override
 	{
-		requests.push_back(request);
+		if (endpoint == Endpoint::Moderations && !async) {
+			moderation_requests.push_back(request);
+			Reply reply = moderation_replies.empty() ? Reply{200, clean_moderation(request), ""}
+								 : moderation_replies.front();
+			if (!moderation_replies.empty())
+				moderation_replies.pop_front();
+			done(reply.status, reply.body, reply.error);
+			return;
+		}
+		if (endpoint == Endpoint::Responses)
+			requests.push_back(request);
 		if (async) {
 			held = std::move(done);
 			return;
@@ -635,6 +649,21 @@ public:
 		done(reply.status, reply.body, reply.error);
 	}
 	void cancel() override { ++cancels; }
+
+	static json clean_moderation(const json &request)
+	{
+		json results = json::array();
+		for (size_t i = 0; i < request["input"].size(); ++i)
+			results.push_back({{"flagged", false}});
+		return {{"results", results}};
+	}
+	static json moderation_body(std::initializer_list<bool> flags)
+	{
+		json results = json::array();
+		for (const bool flag : flags)
+			results.push_back({{"flagged", flag}});
+		return {{"results", results}};
+	}
 
 	static json text_body(const char *text)
 	{
@@ -908,6 +937,71 @@ void test_session_compaction_and_cancel()
 	CHECK(session.proposals().all().empty());
 }
 
+// 送る前の検査で問題ありとされた内容は、Responses API に送らない
+void test_session_moderation()
+{
+	CHECK(parse_moderation(200, FakeTransport::moderation_body({false, true}), 2).ok);
+	CHECK(!parse_moderation(200, FakeTransport::moderation_body({false}), 2).ok);
+	CHECK(!parse_moderation(500, FakeTransport::moderation_body({false}), 1).ok);
+	CHECK(build_moderation_request({"a", "b"})["input"].size() == 2);
+
+	{
+		// 道具の結果が問題ありとされたら、送らない旨の文に差し替えて送る。画面の「送った内容」も差し替える
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back({200, FakeTransport::call_body("c1", kToolGetObsStatus, "{}"), ""});
+		transport.replies.push_back({200, FakeTransport::text_body("答え"), ""});
+		transport.moderation_replies.push_back({200, FakeTransport::moderation_body({false}), ""});
+		transport.moderation_replies.push_back({200, FakeTransport::moderation_body({true}), ""});
+		session.send_user_message("映らない");
+		CHECK(transport.moderation_requests.size() == 2);
+		// 2 回目の検査は、まだ検査していない道具の結果だけ
+		CHECK(transport.moderation_requests[1]["input"].size() == 1);
+		CHECK(transport.requests.size() == 2);
+		const json sent = last_input_item(transport.requests[1]);
+		CHECK(sent["output"] == kWithheldToolOutput);
+		CHECK(!contains_word(transport.requests[1].dump(), "\\\"fps\\\":60"));
+		bool noticed = false;
+		bool display_replaced = false;
+		for (const auto &entry : session.conversation().display()) {
+			noticed = noticed || entry.text == kNoticeWithheld;
+			display_replaced = display_replaced || (entry.kind == DisplayEntry::Kind::ToolResult &&
+								entry.text == kWithheldToolOutput);
+		}
+		CHECK(noticed);
+		CHECK(display_replaced);
+	}
+	{
+		// 利用者の発言が問題ありとされたら、送らない旨の文に差し替える。画面には利用者の発言を残す
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.moderation_replies.push_back({200, FakeTransport::moderation_body({true}), ""});
+		transport.replies.push_back({200, FakeTransport::text_body("お答えできません"), ""});
+		session.send_user_message("問題のある発言");
+		CHECK(transport.requests.size() == 1);
+		CHECK(transport.requests[0]["input"][0]["content"] == kWithheldUserText);
+		CHECK(!contains_word(transport.requests[0].dump(), "問題のある発言"));
+		CHECK(session.conversation().display()[0].text == "問題のある発言");
+	}
+	{
+		// 検査に失敗したら何も送らずに止め、次の送信で検査をやり直す
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.moderation_replies.push_back({500, json::object(), ""});
+		session.send_user_message("最初");
+		CHECK(transport.requests.empty());
+		CHECK(session.state() == SessionState::Idle);
+		CHECK(session.conversation().display().back().text == kNoticeModerationFailed);
+		transport.replies.push_back({200, FakeTransport::text_body("答え"), ""});
+		session.send_user_message("二回目");
+		CHECK(transport.moderation_requests.back()["input"].size() == 2);
+		CHECK(transport.requests.size() == 1);
+	}
+}
+
 // OBS 33 のモニタリングは有効と無効だけで、monitor_only には対応する値が無い
 void test_monitoring_values()
 {
@@ -1020,6 +1114,7 @@ int main()
 	test_session_reject_and_failures();
 	test_session_limits_and_errors();
 	test_session_compaction_and_cancel();
+	test_session_moderation();
 	test_monitoring_values();
 	test_track_mixers();
 	test_output_key_and_config_text();

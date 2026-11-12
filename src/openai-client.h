@@ -27,8 +27,12 @@ public:
 	}
 
 	HttpResult post_responses(const nlohmann::json &request) const;
+	// 送る前の検査。v1/moderations は無料 (https://developers.openai.com/api/docs/guides/moderation)
+	HttpResult post_moderations(const nlohmann::json &request) const;
 
 private:
+	HttpResult post(const char *url, const nlohmann::json &request) const;
+
 	std::string api_key_;
 	const std::atomic<bool> *cancel_;
 };

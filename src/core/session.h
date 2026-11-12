@@ -11,6 +11,12 @@
 
 namespace aia {
 
+enum class Endpoint {
+	Responses,
+	// 送る前の検査
+	Moderations,
+};
+
 // 要求の送り先。終わったら done を呼ぶ。プラグインでは作業のスレッドで送り、done をメインスレッドで呼ぶ
 class Transport {
 public:
@@ -18,7 +24,7 @@ public:
 	// transport_error は libcurl の失敗や本文が JSON でない場合の説明。成功時は空
 	using Done =
 		std::function<void(long http_status, const nlohmann::json &body, const std::string &transport_error)>;
-	virtual void send(const nlohmann::json &request, Done done) = 0;
+	virtual void send(Endpoint endpoint, const nlohmann::json &request, Done done) = 0;
 	virtual void cancel() = 0;
 };
 
@@ -58,6 +64,10 @@ inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
 // できること・できないこと・質問の例 (/help)。画面の側で中身を描く
 inline constexpr const char *kNoticeHelp = "Notice.Help";
+// 送る前の検査で問題ありとされ、その内容を送らなかった
+inline constexpr const char *kNoticeWithheld = "Notice.Withheld";
+// 送る前の検査ができなかったため、何も送らなかった
+inline constexpr const char *kNoticeModerationFailed = "Error.ModerationFailed";
 
 // 1 回の発話から続けて送る要求の上限。道具の呼び出しが止まらない場合に費用が膨らむのを防ぐ
 inline constexpr int kMaxStepsPerTurn = 12;
@@ -89,6 +99,9 @@ public:
 
 private:
 	void start_request();
+	// まだ検査していない利用者の発言と道具の結果を検査し、問題ありとされた内容を差し替えてから next を呼ぶ。
+	// 検査できなければ何も送らずに止める
+	void check_then(std::function<void()> next);
 	void handle_response(long http_status, const nlohmann::json &body, const std::string &transport_error);
 	void handle_summary(long http_status, const nlohmann::json &body, const std::string &transport_error);
 	void run_function_call(const FunctionCall &call);

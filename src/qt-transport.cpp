@@ -29,7 +29,7 @@ void QtTransport::cancel()
 		cancel_->store(true);
 }
 
-void QtTransport::send(const nlohmann::json &request, Done done)
+void QtTransport::send(Endpoint endpoint, const nlohmann::json &request, Done done)
 {
 	// 前の要求の作業のスレッドは、結果を渡し終えているか中断済み
 	join();
@@ -43,11 +43,14 @@ void QtTransport::send(const nlohmann::json &request, Done done)
 	cancel_ = std::make_shared<std::atomic<bool>>(false);
 	auto cancel = cancel_;
 	auto alive = alive_;
-	worker_ = std::thread([request, done = std::move(done), key = std::move(key), cancel, alive]() mutable {
+	worker_ = std::thread([endpoint, request, done = std::move(done), key = std::move(key), cancel,
+			       alive]() mutable {
 		const OpenAiClient client(std::move(key), cancel.get());
-		HttpResult result = client.post_responses(request);
+		const bool moderation = endpoint == Endpoint::Moderations;
+		HttpResult result = moderation ? client.post_moderations(request) : client.post_responses(request);
 		// 本文はログに書かず、処理の時間と状態だけを残す
-		obs_log(LOG_INFO, "responses status=%ld elapsed_ms=%.0f%s", result.http_status, result.elapsed_ms,
+		obs_log(LOG_INFO, "%s status=%ld elapsed_ms=%.0f%s", moderation ? "moderations" : "responses",
+			result.http_status, result.elapsed_ms,
 			result.transport_error.empty() ? "" : " transport_error");
 		if (cancel->load())
 			return;

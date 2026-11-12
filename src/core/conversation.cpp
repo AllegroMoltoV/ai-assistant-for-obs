@@ -1,5 +1,7 @@
 #include "conversation.h"
 
+#include "moderation.h"
+
 namespace aia {
 
 namespace {
@@ -19,6 +21,7 @@ void Conversation::add_user_message(const std::string &text)
 {
 	items_.push_back(user_message_item(text));
 	display_.push_back({DisplayEntry::Kind::User, text});
+	display_of_item_[items_.size() - 1] = display_.size() - 1;
 }
 
 void Conversation::add_response(const ParsedResponse &response)
@@ -42,6 +45,7 @@ void Conversation::add_tool_result(const std::string &call_id, const std::string
 	DisplayEntry entry{DisplayEntry::Kind::ToolResult, sent_text};
 	entry.tool_name = tool_name;
 	display_.push_back(std::move(entry));
+	display_of_item_[items_.size() - 1] = display_.size() - 1;
 }
 
 void Conversation::add_proposal_entry(int proposal_id)
@@ -88,6 +92,8 @@ void Conversation::apply_compaction(const std::string &summary)
 {
 	summary_ = summary;
 	items_.clear();
+	display_of_item_.clear();
+	checked_upto_ = 0;
 	pending_calls_.clear();
 	last_input_tokens_ = 0;
 	display_.push_back({DisplayEntry::Kind::Summary, summary});
@@ -97,9 +103,42 @@ void Conversation::clear()
 {
 	items_.clear();
 	display_.clear();
+	display_of_item_.clear();
+	checked_upto_ = 0;
 	pending_calls_.clear();
 	summary_.clear();
 	last_input_tokens_ = 0;
+}
+
+std::vector<Conversation::UncheckedItem> Conversation::unchecked_items() const
+{
+	std::vector<UncheckedItem> result;
+	for (size_t i = checked_upto_; i < items_.size(); ++i) {
+		const json &item = items_[i];
+		// モデルの出力は OpenAI が返したものなので検査しない。送るのは利用者の発言と道具の結果
+		if (item.value("role", "") == "user" && item.contains("content") && item["content"].is_string())
+			result.push_back({i, item["content"].get<std::string>()});
+		else if (item.value("type", "") == "function_call_output" && item.contains("output") &&
+			 item["output"].is_string())
+			result.push_back({i, item["output"].get<std::string>()});
+	}
+	return result;
+}
+
+void Conversation::withhold(size_t item_index)
+{
+	if (item_index >= items_.size())
+		return;
+	json &item = items_[item_index];
+	const bool is_user = item.value("role", "") == "user";
+	if (is_user)
+		item["content"] = kWithheldUserText;
+	else
+		item["output"] = kWithheldToolOutput;
+	// 利用者の発言は画面に残し、道具の結果は実際に送った文に差し替える
+	const auto shown = display_of_item_.find(item_index);
+	if (!is_user && shown != display_of_item_.end())
+		display_[shown->second].text = kWithheldToolOutput;
 }
 
 } // namespace aia
