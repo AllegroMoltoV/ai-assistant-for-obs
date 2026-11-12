@@ -2,7 +2,7 @@
 
 ## はじめに
 
-OBS のドックで動く AI アシスタントのプラグインが、承認を得て出力の設定を書き換える機能を持つ予定です。プラグインが書き換えられるのは `obs_frontend_get_profile_config()` が返す config_t と、プロファイルのフォルダーにある `streamEncoder.json`・`recordEncoder.json` です。出力ハンドラーを作り直す `OBSBasic::ResetOutputs()` は非公開で、公開 API で使えるのは `obs_frontend_reset_video()` だけです。
+OBS のドックで動作する AI アシスタントのプラグインが、承認を得て出力の設定を書き換える機能を持つ予定です。プラグインが書き換えられるのは `obs_frontend_get_profile_config()` が返す config_t と、プロファイルのフォルダーにある `streamEncoder.json`・`recordEncoder.json` です。出力ハンドラーを作り直す `OBSBasic::ResetOutputs()` は非公開で、公開 API で使えるのは `obs_frontend_reset_video()` だけです。
 
 依頼者の決定により、公開の手段で反映できない項目は書き換えず、OBS の設定画面での手順を案内します。本レポートでは、その線引きのために、出力の設定の項目ごとに書き込み先、読まれる場所、反映のタイミング、配信中・録画中の扱いを整理します。
 
@@ -167,7 +167,7 @@ config のセクションはすべて `AdvOut` です。断りのないキーは
 
 公開の手段で反映できる経路は、次の開始時の読み直しと `obs_frontend_reset_video()` の 2 つだけと考えています。`Update()` が稼働中のエンコーダーに届く経路は、詳細出力の音声ビットレートと、リプレイバッファー稼働中の配信の映像の設定に限られ、どちらも別の出力の開始という副作用に依存します。この経路を配信中の変更の手段として案内するのは避けるべきと考えています。
 
-「次の開始時、全停止のとき」の項目は、仮想カメラやリプレイバッファーが動いている間に書き換えると、それらを止めるまで反映されません。プラグインでは、書き換えの前に `obs_frontend_streaming_active()`、`obs_frontend_recording_active()`、`obs_frontend_replay_buffer_active()`、`obs_frontend_virtualcam_active()` で稼働状態を確かめ、稼働中なら「すべての出力を止めたあとの開始時に反映されます」と伝えるのがよいと考えています。
+「次の開始時、全停止のとき」の項目は、仮想カメラやリプレイバッファーが動作している間に書き換えると、それらを止めるまで反映されません。プラグインでは、書き換えの前に `obs_frontend_streaming_active()`、`obs_frontend_recording_active()`、`obs_frontend_replay_buffer_active()`、`obs_frontend_virtualcam_active()` で稼働状態を確かめ、稼働中なら「すべての出力を止めたあとの開始時に反映されます」と伝えるのがよいと考えています。
 
 `obs_frontend_reset_video()` は戻り値が無く、稼働中は黙って何もしません。呼ぶ前に上の 4 関数と `obs_video_active()` で非稼働を確かめ、呼んだあとに `obs_get_video_info()` で実際の解像度と FPS を読み直して成否を判定する必要があると考えています。また `invokeMethod` を通さずプレビューなどの UI を触るため、Qt のメインスレッドから呼ぶ必要があると考えています。
 

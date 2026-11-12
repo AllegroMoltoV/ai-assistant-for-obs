@@ -49,7 +49,7 @@
 
 ### CI
 
-- `push.yaml` は main とタグへの push で動きます。タグのときは draft のリリースを作ります。
+- `push.yaml` は main とタグへの push で動作します。タグのときは draft のリリースを作ります。
 - `build-project.yaml` は macOS・Ubuntu 26.04・windows-2025-vs2026 でビルドします。
 
 ### モデル比較の試験 rts-model-eval
