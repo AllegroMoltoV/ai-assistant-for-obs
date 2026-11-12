@@ -1220,6 +1220,9 @@ void test_display_names()
 		output_setting_value("Video/FPSType", json(std::to_string(value)), ui);
 	output_setting_value("AdvOut/RecTracks", json("63"), ui);
 	encoder_setting_label(true, "", ui);
+	// 基本の出力モードの映像エンコーダの選択肢も、OBS の訳を引けない版のために写しを持つ
+	for (const auto &choice : simple_encoder_choices())
+		fake.obs_keys.insert(choice.locale_key);
 	for (const char *file : {"ja-JP.ini", "en-US.ini"}) {
 		const std::set<std::string> keys = locale_keys(file);
 		for (const auto &key : fake.plugin_keys) {

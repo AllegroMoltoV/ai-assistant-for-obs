@@ -21,7 +21,12 @@
       "video": {"base_resolution": "1920x1080", "output_resolution": "1920x1080", "fps": "60"},
       "output": {
         "mode": "Simple",
-        "settings": {"SimpleOutput/StreamEncoder": "x264", "SimpleOutput/Preset": "medium", "SimpleOutput/VBitrate": 6000, "SimpleOutput/ABitrate": 160, "SimpleOutput/RecQuality": "Stream", "SimpleOutput/RecFormat2": "hybrid_mp4"}
+        "settings": {"SimpleOutput/StreamEncoder": "x264", "SimpleOutput/Preset": "medium", "SimpleOutput/VBitrate": 6000, "SimpleOutput/ABitrate": 160, "SimpleOutput/RecQuality": "Stream", "SimpleOutput/RecFormat2": "hybrid_mp4"},
+        "video_encoder_choices": [
+          {"value": "x264", "label": "ソフトウェア (x264)"},
+          {"value": "nvenc", "label": "ハードウェア (NVENC, H.264)"},
+          {"value": "nvenc_hevc", "label": "ハードウェア (NVENC, HEVC)"}
+        ]
       },
       "active": {"streaming": false, "recording": false, "replay_buffer": false, "virtual_camera": false},
       "stats": {"active_fps": 60.0, "average_frame_render_time_ms": 1.9, "frames_missed_due_to_rendering_lag": "21 / 108032 (0.0%)", "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)", "dropped_frames_network": "0 / 0 (0.0%)", "cpu_usage_percent": 17.2, "memory_mb": 590, "note": "stats of the last stream are in the log"}

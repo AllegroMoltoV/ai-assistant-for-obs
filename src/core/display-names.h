@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace aia {
 
@@ -47,5 +48,14 @@ std::string plain_value_text(const nlohmann::json &value, const UiText &ui);
 
 // 数の値に単位を添える。value は数か、数を表す文字列。suffix は OBS のプロパティの接尾辞のように、区切りの空白を含めて渡す
 std::string number_text(const nlohmann::json &value, const std::string &suffix);
+
+// 基本の出力モードの映像エンコーダの選択肢。OBS の設定画面と同じ並びと訳のキー
+// (frontend/settings/OBSBasicSettings_Stream.cpp 1748-1800 行)。encoder_id が登録されているときだけ画面に出る
+struct SimpleEncoderChoice {
+	const char *value;
+	const char *locale_key;
+	const char *encoder_id;
+};
+const std::vector<SimpleEncoderChoice> &simple_encoder_choices();
 
 } // namespace aia

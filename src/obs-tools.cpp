@@ -1096,6 +1096,26 @@ std::string read_obs_status()
 				output["recordEncoder.json"] = read_profile_json("recordEncoder.json");
 		}
 		output["settings"] = std::move(settings);
+		// 映像エンコーダの選択肢を設定画面と同じ名前で渡し、モデルが手順の案内で正しい名前を書けるようにする
+		json choices = json::array();
+		if (mode == OutputMode::Simple) {
+			for (const auto &choice : simple_encoder_choices()) {
+				if (obs_get_encoder_codec(choice.encoder_id))
+					choices.push_back(
+						{{"value", choice.value}, {"label", obs_ui_text(choice.locale_key)}});
+			}
+		} else {
+			const char *id = nullptr;
+			for (size_t i = 0; obs_enum_encoder_types(i, &id); ++i) {
+				if (obs_get_encoder_type(id) != OBS_ENCODER_VIDEO ||
+				    (obs_get_encoder_caps(id) &
+				     (OBS_ENCODER_CAP_DEPRECATED | OBS_ENCODER_CAP_INTERNAL)))
+					continue;
+				choices.push_back(
+					{{"value", id}, {"label", text_or_empty(obs_encoder_get_display_name(id))}});
+			}
+		}
+		output["video_encoder_choices"] = std::move(choices);
 		out["output"] = std::move(output);
 	}
 

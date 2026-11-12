@@ -399,4 +399,20 @@ std::string number_text(const json &value, const std::string &suffix)
 	return text + suffix;
 }
 
+const std::vector<SimpleEncoderChoice> &simple_encoder_choices()
+{
+	static const std::vector<SimpleEncoderChoice> choices = {
+		{"x264", "Basic.Settings.Output.Simple.Encoder.Software", "obs_x264"},
+		{"qsv", "Basic.Settings.Output.Simple.Encoder.Hardware.QSV.H264", "obs_qsv11"},
+		{"qsv_av1", "Basic.Settings.Output.Simple.Encoder.Hardware.QSV.AV1", "obs_qsv11_av1"},
+		{"nvenc", "Basic.Settings.Output.Simple.Encoder.Hardware.NVENC.H264", "ffmpeg_nvenc"},
+		{"nvenc_av1", "Basic.Settings.Output.Simple.Encoder.Hardware.NVENC.AV1", "obs_nvenc_av1_tex"},
+		{"amd_hevc", "Basic.Settings.Output.Simple.Encoder.Hardware.AMD.HEVC", "h265_texture_amf"},
+		{"nvenc_hevc", "Basic.Settings.Output.Simple.Encoder.Hardware.NVENC.HEVC", "ffmpeg_hevc_nvenc"},
+		{"amd", "Basic.Settings.Output.Simple.Encoder.Hardware.AMD.H264", "h264_texture_amf"},
+		{"amd_av1", "Basic.Settings.Output.Simple.Encoder.Hardware.AMD.AV1", "av1_texture_amf"},
+	};
+	return choices;
+}
+
 } // namespace aia
