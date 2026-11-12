@@ -361,7 +361,9 @@ QWidget *Dock::build_tool_result(const DisplayEntry &entry)
 	auto *layout = new QVBoxLayout(box);
 	layout->setContentsMargins(0, 0, 0, 0);
 	auto *toggle = new QToolButton(box);
-	toggle->setText(text("Dock.SentData").arg(utf8(entry.tool_name)));
+	// 道具の内部の名前ではなく、data/locale の Tool.<名前> の表示名を見せる
+	const std::string tool_key = "Tool." + entry.tool_name;
+	toggle->setText(text("Dock.SentData").arg(text(tool_key.c_str())));
 	toggle->setCheckable(true);
 	toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 	toggle->setArrowType(Qt::RightArrow);

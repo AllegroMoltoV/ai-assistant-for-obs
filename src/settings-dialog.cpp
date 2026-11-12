@@ -56,12 +56,16 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	// プラグインは無料で、OpenAI API の利用料金は利用者の負担であることを示す
 	auto *cost_label = new QLabel(text("Settings.ApiKey.Cost"), key_group);
 	cost_label->setWordWrap(true);
+	// API の利用が利用者のアカウントと責任で行われることと、送るデータと、無保証であることを示す
+	auto *responsibility_label = new QLabel(text("Settings.ApiKey.Responsibility"), key_group);
+	responsibility_label->setWordWrap(true);
 	auto *key_layout = new QVBoxLayout(key_group);
 	key_layout->addWidget(status_label_);
 	key_layout->addLayout(input_row);
 	key_layout->addWidget(key_message_label_);
 	key_layout->addWidget(issue_label);
 	key_layout->addWidget(cost_label);
+	key_layout->addWidget(responsibility_label);
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	buttons->button(QDialogButtonBox::Close)->setText(text("Settings.Close"));
