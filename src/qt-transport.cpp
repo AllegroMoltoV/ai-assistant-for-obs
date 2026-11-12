@@ -32,31 +32,33 @@ void QtTransport::cancel()
 void QtTransport::send(Endpoint endpoint, const nlohmann::json &request, Done done)
 {
 	const bool moderation = endpoint == Endpoint::Moderations;
-	start(moderation ? "moderations" : "responses",
-	      [request, moderation](const OpenAiClient &client, const std::shared_ptr<std::atomic<bool>> &,
-				    const std::shared_ptr<std::atomic<bool>> &) {
-		      return moderation ? client.post_moderations(request) : client.post_responses(request);
-	      },
-	      std::move(done));
+	start(
+		moderation ? "moderations" : "responses",
+		[request, moderation](const OpenAiClient &client, const std::shared_ptr<std::atomic<bool>> &,
+				      const std::shared_ptr<std::atomic<bool>> &) {
+			return moderation ? client.post_moderations(request) : client.post_responses(request);
+		},
+		std::move(done));
 }
 
 void QtTransport::send_stream(const nlohmann::json &request, Delta delta, Done done)
 {
-	start("responses_stream",
-	      [request, delta = std::move(delta)](const OpenAiClient &client,
-						  const std::shared_ptr<std::atomic<bool>> &cancel,
-						  const std::shared_ptr<std::atomic<bool>> &alive) {
-		      // 文の差分はメインスレッドへ届いた順に移す。結果の done も同じキューに入るため、差分より後に届く
-		      return client.post_responses_stream(request, [&delta, cancel, alive](const std::string &text) {
-			      if (cancel->load())
-				      return;
-			      post_to_main_thread([delta, text, alive] {
-				      if (alive->load())
-					      delta(text);
-			      });
-		      });
-	      },
-	      std::move(done));
+	start(
+		"responses_stream",
+		[request, delta = std::move(delta)](const OpenAiClient &client,
+						    const std::shared_ptr<std::atomic<bool>> &cancel,
+						    const std::shared_ptr<std::atomic<bool>> &alive) {
+			// 文の差分はメインスレッドへ届いた順に移す。結果の done も同じキューに入るため、差分より後に届く
+			return client.post_responses_stream(request, [&delta, cancel, alive](const std::string &text) {
+				if (cancel->load())
+					return;
+				post_to_main_thread([delta, text, alive] {
+					if (alive->load())
+						delta(text);
+				});
+			});
+		},
+		std::move(done));
 }
 
 void QtTransport::start(const char *label, Call call, Done done)

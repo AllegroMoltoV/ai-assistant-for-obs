@@ -66,8 +66,7 @@ void Session::start_request()
 	changed();
 	check_then([this] {
 		const int generation = generation_;
-		const json request =
-			build_request(config_, instructions_, tools_, conversation_.request_items());
+		const json request = build_request(config_, instructions_, tools_, conversation_.request_items());
 		streaming_text_.clear();
 		transport_.send_stream(
 			request,

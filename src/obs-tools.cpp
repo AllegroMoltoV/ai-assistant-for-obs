@@ -1481,8 +1481,8 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 	if (settings.is_object()) {
 		PropertiesPtr props(obs_get_source_properties(kind->obs_id));
 		for (auto it = settings.begin(); it != settings.end(); ++it) {
-			if (!normalize_color_value(obs_properties_get(props.get(), it.key().c_str()), it.key(), it.value(),
-						   result.error))
+			if (!normalize_color_value(obs_properties_get(props.get(), it.key().c_str()), it.key(),
+						   it.value(), result.error))
 				return result;
 		}
 	}
@@ -1494,12 +1494,9 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 		       {"scene", kind->is_filter ? json() : json(parent_name)},
 		       {"name", request.name}};
 	proposal.items.push_back(std::move(item));
-	proposal.apply_data = {{"kind", "add"},
-			       {"kind_name", kind->name},
-			       {"obs_id", kind->obs_id},
-			       {"is_filter", kind->is_filter},
-			       {"parent", parent_name},
-			       {"name", request.name},
+	proposal.apply_data = {{"kind", "add"},          {"kind_name", kind->name},
+			       {"obs_id", kind->obs_id}, {"is_filter", kind->is_filter},
+			       {"parent", parent_name},  {"name", request.name},
 			       {"settings", settings}};
 	result.ok = true;
 	return result;

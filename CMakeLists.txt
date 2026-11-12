@@ -127,7 +127,10 @@ if(AIA_BUILD_DOCK_PREVIEW)
     "${CMAKE_CURRENT_SOURCE_DIR}/src/openai-client.cpp"
   )
   target_include_directories(aia-dock-preview PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-  target_link_libraries(aia-dock-preview PRIVATE aia-core OBS::libobs CURL::libcurl Qt6::Core Qt6::Widgets)
+  target_link_libraries(
+    aia-dock-preview
+    PRIVATE aia-core OBS::libobs CURL::libcurl Qt6::Core Qt6::Widgets
+  )
   target_compile_definitions(aia-dock-preview PRIVATE AIA_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   set_target_properties(aia-dock-preview PROPERTIES AUTOMOC ON)
 endif()

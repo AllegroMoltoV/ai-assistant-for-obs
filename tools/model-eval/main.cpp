@@ -1234,10 +1234,14 @@ int command_language(int argc, char **argv)
 		const char *assistant;
 	};
 	const Case cases[] = {
-		{"ja-JP", true, "配信で自分の声が二重に聞こえると言われました", "マイクの音声モニタリングの設定を確かめましょう。"},
-		{"en-US", false, "Viewers say my voice sounds doubled on stream", "Let's check the audio monitoring of your mic."},
-		{"ja-JP", false, "Viewers say my voice sounds doubled on stream", "Let's check the audio monitoring of your mic."},
-		{"en-US", true, "配信で自分の声が二重に聞こえると言われました", "マイクの音声モニタリングの設定を確かめましょう。"},
+		{"ja-JP", true, "配信で自分の声が二重に聞こえると言われました",
+		 "マイクの音声モニタリングの設定を確かめましょう。"},
+		{"en-US", false, "Viewers say my voice sounds doubled on stream",
+		 "Let's check the audio monitoring of your mic."},
+		{"ja-JP", false, "Viewers say my voice sounds doubled on stream",
+		 "Let's check the audio monitoring of your mic."},
+		{"en-US", true, "配信で自分の声が二重に聞こえると言われました",
+		 "マイクの音声モニタリングの設定を確かめましょう。"},
 	};
 	const OpenAiClient client(key, nullptr);
 	const ModelConfig config;
@@ -1254,9 +1258,10 @@ int command_language(int argc, char **argv)
 		ParsedResponse assistant;
 		assistant.ok = true;
 		assistant.text = c.assistant;
-		assistant.output_items.push_back({{"type", "message"},
-						  {"role", "assistant"},
-						  {"content", json::array({{{"type", "output_text"}, {"text", c.assistant}}})}});
+		assistant.output_items.push_back(
+			{{"type", "message"},
+			 {"role", "assistant"},
+			 {"content", json::array({{{"type", "output_text"}, {"text", c.assistant}}})}});
 		conversation.add_response(assistant);
 		const HttpResult summary =
 			client.post_responses(conversation.build_summary_request(config, instructions, no_tools));
@@ -1277,7 +1282,9 @@ int command_language(int argc, char **argv)
 int command_save_key(int argc, char **argv)
 {
 	if (argc < 4) {
-		std::fprintf(stderr, "usage: aia-model-eval save-key <.env> <plugin_config の ai-assistant-for-obs のフォルダー>\n");
+		std::fprintf(
+			stderr,
+			"usage: aia-model-eval save-key <.env> <plugin_config の ai-assistant-for-obs のフォルダー>\n");
 		return 2;
 	}
 	const std::string key = read_api_key(argv[2]);
@@ -1321,24 +1328,25 @@ int command_slow(int argc, char **argv)
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
-				 +[](char *data, size_t size, size_t count, void *user) {
-					 static_cast<std::string *>(user)->append(data, size * count);
-					 return size * count;
-				 });
+		curl_easy_setopt(
+			curl, CURLOPT_WRITEFUNCTION, +[](char *data, size_t size, size_t count, void *user) {
+				static_cast<std::string *>(user)->append(data, size * count);
+				return size * count;
+			});
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 		const std::string variant = argc >= 5 ? argv[4] : "";
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, variant == "connect180" ? 180L : 10L);
 		if (variant == "tls12")
-			curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_TLSv1_2);
+			curl_easy_setopt(curl, CURLOPT_SSLVERSION,
+					 CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_TLSv1_2);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 180L);
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,
-				 +[](CURL *, curl_infotype type, char *data, size_t size, void *) {
-					 if (type == CURLINFO_TEXT)
-						 std::fwrite(data, 1, size, stderr);
-					 return 0;
-				 });
+		curl_easy_setopt(
+			curl, CURLOPT_DEBUGFUNCTION, +[](CURL *, curl_infotype type, char *data, size_t size, void *) {
+				if (type == CURLINFO_TEXT)
+					std::fwrite(data, 1, size, stderr);
+				return 0;
+			});
 		const auto started = std::chrono::steady_clock::now();
 		const CURLcode rc = curl_easy_perform(curl);
 		const double ms =
@@ -1360,7 +1368,8 @@ int command_slow(int argc, char **argv)
 		std::string joined;
 		const HttpResult result = client.post_responses_stream(request, [&](const std::string &text) {
 			if (first_ms < 0)
-				first_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)
+				first_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+										     started)
 						   .count();
 			++deltas;
 			joined += text;

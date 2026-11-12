@@ -331,8 +331,8 @@ void Dock::update_minimum_width()
 	const QMargins margins = layout()->contentsMargins();
 	const int history_width = history_layout_->minimumSize().width() +
 				  scroll_->verticalScrollBar()->sizeHint().width() + 2 * scroll_->frameWidth();
-	const int needed = std::max({kDockMinimumWidth, history_width + margins.left() + margins.right(),
-				     layout()->minimumSize().width()});
+	const int needed = std::max(
+		{kDockMinimumWidth, history_width + margins.left() + margins.right(), layout()->minimumSize().width()});
 	if (minimumWidth() != needed)
 		setMinimumWidth(needed);
 }

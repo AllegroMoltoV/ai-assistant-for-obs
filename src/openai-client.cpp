@@ -23,7 +23,7 @@ constexpr long kConnectTimeoutSeconds = kTimeoutSeconds;
 // 届いた本文を受け取り先の関数に渡す
 size_t write_body(char *data, size_t size, size_t count, void *user)
 {
-	(*static_cast<const std::function<void(const char *, size_t)> *>(user))(data, size * count);
+	(*static_cast<const std::function<void(const char *, size_t)> *>(user))(data, size *count);
 	return size * count;
 }
 
@@ -52,7 +52,8 @@ HttpResult OpenAiClient::post_responses_stream(const nlohmann::json &request,
 	nlohmann::json body = request;
 	body["stream"] = true;
 	StreamReader reader(on_delta);
-	HttpResult result = post(kResponsesUrl, body, [&reader](const char *data, size_t size) { reader.feed(data, size); });
+	HttpResult result =
+		post(kResponsesUrl, body, [&reader](const char *data, size_t size) { reader.feed(data, size); });
 	if (!result.transport_error.empty())
 		return result;
 	result.body = reader.finish();
@@ -64,7 +65,8 @@ HttpResult OpenAiClient::post_responses_stream(const nlohmann::json &request,
 HttpResult OpenAiClient::post_json(const char *url, const nlohmann::json &request) const
 {
 	std::string response;
-	HttpResult result = post(url, request, [&response](const char *data, size_t size) { response.append(data, size); });
+	HttpResult result =
+		post(url, request, [&response](const char *data, size_t size) { response.append(data, size); });
 	if (!result.transport_error.empty())
 		return result;
 	result.body = nlohmann::json::parse(response, nullptr, false);

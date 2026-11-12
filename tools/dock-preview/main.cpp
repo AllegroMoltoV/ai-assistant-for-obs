@@ -60,14 +60,13 @@ std::deque<json> echo_script()
 			       {"title", "Audio Mixer Guide"},
 			       {"start_index", 60},
 			       {"end_index", 70}};
-	const json change_args = {
-		{"reason", "マイクの音声モニタリングを切り、声が二重に入るのを止めます"},
-		{"changes", json::array({{{"target", "audio_volume_db"},
-					  {"scene", nullptr},
-					  {"source", "マイク"},
-					  {"filter", nullptr},
-					  {"key", nullptr},
-					  {"value_json", "-6.5"}}})}};
+	const json change_args = {{"reason", "マイクの音声モニタリングを切り、声が二重に入るのを止めます"},
+				  {"changes", json::array({{{"target", "audio_volume_db"},
+							    {"scene", nullptr},
+							    {"source", "マイク"},
+							    {"filter", nullptr},
+							    {"key", nullptr},
+							    {"value_json", "-6.5"}}})}};
 	std::deque<json> script;
 	script.push_back(response(json::array({{{"type", "function_call"},
 						{"call_id", "call_1"},
@@ -80,9 +79,10 @@ std::deque<json> echo_script()
 						{"name", "change_settings"},
 						{"arguments", change_args.dump()}}}),
 				  14000));
-	script.push_back(response(json::array({message_item(
-					  "マイクの音声モニタリングを「モニターオフ」にしました。もう一度、声が二重に聞こえるか確かめてください。")}),
-				  70000));
+	script.push_back(response(
+		json::array({message_item(
+			"マイクの音声モニタリングを「モニターオフ」にしました。もう一度、声が二重に聞こえるか確かめてください。")}),
+		70000));
 	return script;
 }
 
@@ -156,8 +156,8 @@ int report_clipped(QWidget *root, const QString &scene, FILE *out)
 		const int needed = label->heightForWidth(label->width());
 		if (needed > label->height()) {
 			++clipped;
-			std::fprintf(out, "CLIPPED %s: label width=%d height=%d needed=%d text=%s\n", qUtf8Printable(scene),
-				     label->width(), label->height(), needed,
+			std::fprintf(out, "CLIPPED %s: label width=%d height=%d needed=%d text=%s\n",
+				     qUtf8Printable(scene), label->width(), label->height(), needed,
 				     qUtf8Printable(label->text().left(30).replace('\n', ' ')));
 		}
 	}

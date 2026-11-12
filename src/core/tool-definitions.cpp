@@ -151,9 +151,10 @@ json build_tools_json()
 		"Get the settings and filters of one source, and the selectable values of its properties such as "
 		"capture methods and device lists.",
 		object_schema({{"source", {{"type", "string"}, {"description", "Source name."}}}})));
-	tools.push_back(function_tool(kToolReadLog,
-				      "Read the last 300 lines of the current OBS log. Lines that repeat the same message are collapsed into one line with the count. Secrets are masked.",
-				      object_schema(json::object())));
+	tools.push_back(function_tool(
+		kToolReadLog,
+		"Read the last 300 lines of the current OBS log. Lines that repeat the same message are collapsed into one line with the count. Secrets are masked.",
+		object_schema(json::object())));
 	tools.push_back(function_tool(
 		kToolChangeSettings,
 		"Propose changes to existing OBS settings. The user sees the before and after values and must approve "

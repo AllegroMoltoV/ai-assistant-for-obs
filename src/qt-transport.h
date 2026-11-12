@@ -22,8 +22,9 @@ public:
 
 private:
 	// 作業のスレッドで行う送信。cancel と alive は、差分をメインスレッドへ移すときに確かめる
-	using Call = std::function<HttpResult(const OpenAiClient &client, const std::shared_ptr<std::atomic<bool>> &cancel,
-					      const std::shared_ptr<std::atomic<bool>> &alive)>;
+	using Call =
+		std::function<HttpResult(const OpenAiClient &client, const std::shared_ptr<std::atomic<bool>> &cancel,
+					 const std::shared_ptr<std::atomic<bool>> &alive)>;
 	// label はログに書く送り先の名前
 	void start(const char *label, Call call, Done done);
 	void join();

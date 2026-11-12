@@ -120,7 +120,7 @@ void test_tools_json()
 		for (const auto &kind : kinds)
 			listed.insert(kind.get<std::string>());
 		const std::set<std::string> expected = {
-			"noise_suppression",         "gain",          "compressor", "crop",
+			"noise_suppression",         "gain",           "compressor",  "crop",
 			"application_audio_capture", "browser_source", "color_source"};
 		CHECK(listed == expected);
 		// 入れ子のオブジェクトにも strict の条件がかかる
@@ -989,7 +989,9 @@ void test_session_empty_or_cut_reply()
 	CHECK(session.conversation().display().back().text == kNoticeEmptyReply);
 
 	transport.replies.push_back(
-		{200, json::parse(R"({"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]})"),
+		{200,
+		 json::parse(
+			 R"({"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]})"),
 		 ""});
 	session.send_user_message("もう一度");
 	CHECK(session.conversation().display().back().text == kNoticeIncomplete);
