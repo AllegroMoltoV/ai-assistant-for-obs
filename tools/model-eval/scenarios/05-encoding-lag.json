@@ -1,9 +1,10 @@
 {
   "title": "配信がカクつく (x264 のエンコードが追いつかない、エンコーダーの種類の変更は案内に回す)",
-  "first_message": "配信がカクカクするって言われました。ゲームは普通に動いてます",
+  "first_message": "なんか配信おかしいって言われた。カクカク? してるらしい。ゲームは普通",
   "user_replies": [
-    "いまは配信を止めてます。グラボは RTX 3060 です",
-    "設定画面でやってみます。ありがとうございます"
+    "いまは止めてる。グラボ? たぶん RTX の 3060 だったと思う",
+    "どこ見ればいいの? 設定のどこ?",
+    "やってみる"
   ],
   "output_mode": "Simple",
   "outputs_active": false,
@@ -47,7 +48,13 @@
         "width": 1920,
         "height": 1080,
         "settings": {"capture_mode": "window", "window": "Apex Legends:Respawn001:r5apex_dx12.exe", "capture_cursor": true, "capture_audio": false},
-        "filters": []
+        "filters": [],
+        "property_options": {
+          "capture_mode": {"description": "モード", "options": [{"label": "フルスクリーンアプリケーションをキャプチャ", "value": "any_fullscreen"}, {"label": "特定のウィンドウをキャプチャ", "value": "window"}, {"label": "ホットキーで前面のウィンドウをキャプチャ", "value": "hotkey"}]},
+          "window": {"description": "ウィンドウ", "options": [{"label": "", "value": ""}, {"label": "[r5apex_dx12.exe]: Apex Legends", "value": "Apex Legends:Respawn001:r5apex_dx12.exe"}, {"label": "[obs64.exe]: OBS 33.0.1 - プロファイル: 無題 - シーン: 無題", "value": "OBS 33.0.1 - プロファイル#3A 無題 - シーン#3A 無題:Qt683QWindowIcon:obs64.exe"}]},
+          "priority": {"description": "ウィンドウの一致優先順位", "options": [{"label": "ウィンドウのタイトルに一致する必要があります", "value": 1}, {"label": "タイトルに一致、そうでなければ同じ種類のウィンドウを見つける", "value": 0}, {"label": "タイトルに一致、そうでなければ同じ実行可能ファイルのウィンドウを見つける", "value": 2}]},
+          "hook_rate": {"description": "フック速度", "options": [{"label": "低速", "value": 0}, {"label": "通常 (推奨)", "value": 1}, {"label": "高速", "value": 2}, {"label": "最速", "value": 3}]}
+        }
       }
     },
     "read_log": [
