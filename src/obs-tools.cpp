@@ -1,5 +1,6 @@
 #include "obs-tools.h"
 
+#include "core/display-names.h"
 #include "core/obs-values.h"
 #include "core/secrets.h"
 #include "core/tool-definitions.h"
@@ -93,6 +94,109 @@ std::string localized(const char *key, const std::vector<std::string> &args)
 	for (size_t i = 0; i < args.size(); ++i)
 		text = replace_all(text, "%" + std::to_string(i + 1), args[i]);
 	return text;
+}
+
+// OBS 本体の訳を引く。版の違いでキーが無いときは、OBS の訳を写したプラグインの "OBS.<キー>" を使う。
+// obs_frontend_get_locale_string はキーが無いとき、渡したキーをそのまま返す
+std::string obs_ui_text(const char *key)
+{
+	const char *text = obs_frontend_get_locale_string(key);
+	if (text && *text && std::strcmp(text, key) != 0)
+		return text;
+	const std::string fallback = std::string("OBS.") + key;
+	return obs_module_text(fallback.c_str());
+}
+
+std::string plugin_ui_text(const char *key)
+{
+	return obs_module_text(key);
+}
+
+const UiText &ui_text()
+{
+	static const UiText ui = {obs_ui_text, plugin_ui_text};
+	return ui;
+}
+
+// 一覧のプロパティで、値に当たる選択肢の名前。見つからなければ空
+std::string list_item_name(obs_property_t *p, const json &value)
+{
+	const obs_combo_format format = obs_property_list_format(p);
+	const size_t count = obs_property_list_item_count(p);
+	for (size_t i = 0; i < count; ++i) {
+		bool match = false;
+		switch (format) {
+		case OBS_COMBO_FORMAT_INT:
+			match = value.is_number() && obs_property_list_item_int(p, i) == value.get<long long>();
+			break;
+		case OBS_COMBO_FORMAT_FLOAT:
+			match = value.is_number() &&
+				std::fabs(obs_property_list_item_float(p, i) - value.get<double>()) < 1e-9;
+			break;
+		case OBS_COMBO_FORMAT_STRING:
+			match = value.is_string() &&
+				text_or_empty(obs_property_list_item_string(p, i)) == value.get<std::string>();
+			break;
+		case OBS_COMBO_FORMAT_BOOL:
+			match = value.is_boolean() && obs_property_list_item_bool(p, i) == value.get<bool>();
+			break;
+		case OBS_COMBO_FORMAT_INVALID:
+			break;
+		}
+		if (match)
+			return text_or_empty(obs_property_list_item_name(p, i));
+	}
+	return std::string();
+}
+
+// プロパティの項目名。プロパティが見つからないときだけキーをそのまま使う
+std::string property_label(obs_property_t *p, const std::string &key)
+{
+	const std::string description = p ? text_or_empty(obs_property_description(p)) : std::string();
+	return description.empty() ? key : description;
+}
+
+// プロパティの値を、プロパティの画面と同じ表し方にする。一覧は選択肢の名前、数は OBS の単位を添える
+std::string property_value_text(obs_property_t *p, const json &value)
+{
+	const UiText &ui = ui_text();
+	if (!p || value.is_null())
+		return plain_value_text(value, ui);
+	switch (obs_property_get_type(p)) {
+	case OBS_PROPERTY_LIST: {
+		const std::string name = list_item_name(p, value);
+		if (!name.empty())
+			return name;
+		break;
+	}
+	case OBS_PROPERTY_INT:
+		if (value.is_number())
+			return number_text(value, text_or_empty(obs_property_int_suffix(p)));
+		break;
+	case OBS_PROPERTY_FLOAT:
+		if (value.is_number())
+			return number_text(value, text_or_empty(obs_property_float_suffix(p)));
+		break;
+	default:
+		break;
+	}
+	return plain_value_text(value, ui);
+}
+
+// 追加する項目の設定を「項目名: 値」の並びにする。設定が無ければ既定の設定と示す
+std::string add_settings_text(const char *obs_id, const json &settings)
+{
+	if (!settings.is_object() || settings.empty())
+		return obs_module_text("Proposal.DefaultSettings");
+	PropertiesPtr props(obs_get_source_properties(obs_id));
+	std::string out;
+	for (auto it = settings.begin(); it != settings.end(); ++it) {
+		obs_property_t *p = obs_properties_get(props.get(), it.key().c_str());
+		if (!out.empty())
+			out += obs_module_text("Value.ListSeparator");
+		out += property_label(p, it.key()) + ": " + property_value_text(p, it.value());
+	}
+	return out;
 }
 
 double round_to(double value, double unit)
@@ -289,7 +393,7 @@ Change change_from_entry(const json &entry)
 	return change;
 }
 
-bool prepare_source_setting(const Change &change, json &entry, ProposalItem &item, std::string &error)
+bool prepare_source_setting(const Change &change, json &entry, json &before, ProposalItem &item, std::string &error)
 {
 	const bool is_filter = change.target == ChangeTarget::FilterSetting;
 	Located located;
@@ -300,19 +404,23 @@ bool prepare_source_setting(const Change &change, json &entry, ProposalItem &ite
 	const json current = data_to_json(settings, true);
 	const bool in_settings = current.contains(change.key);
 	PropertiesPtr props(obs_source_properties(target));
-	if (!in_settings && !obs_properties_get(props.get(), change.key.c_str())) {
+	obs_property_t *property = obs_properties_get(props.get(), change.key.c_str());
+	if (!in_settings && !property) {
 		error = "unknown setting key " + change.key + ". Call " + kToolGetSourceDetails +
 			" to see the available keys";
 		return false;
 	}
-	item.before = in_settings ? current[change.key] : json();
+	before = in_settings ? current[change.key] : json();
 	entry["before_user_set"] = settings && obs_data_has_user_value(settings, change.key.c_str());
-	item.label = is_filter ? localized("Proposal.FilterSetting", {change.source, change.filter, change.key})
-			       : localized("Proposal.SourceSetting", {change.source, change.key});
+	const std::string name = property_label(property, change.key);
+	item.label = is_filter ? localized("Proposal.FilterSetting", {change.source, change.filter, name})
+			       : localized("Proposal.SourceSetting", {change.source, name});
+	item.before = property_value_text(property, before);
+	item.after = property_value_text(property, change.value);
 	return true;
 }
 
-bool prepare_audio(const Change &change, json &entry, ProposalItem &item, std::string &error)
+bool prepare_audio(const Change &change, json &entry, json &before, ProposalItem &item, std::string &error)
 {
 	Located located;
 	if (!locate_source(change, false, located, error))
@@ -324,14 +432,12 @@ bool prepare_audio(const Change &change, json &entry, ProposalItem &item, std::s
 	}
 	switch (change.target) {
 	case ChangeTarget::AudioMute:
-		item.before = obs_source_muted(source);
-		item.label = localized("Proposal.AudioMute", {change.source});
+		before = obs_source_muted(source);
 		break;
 	case ChangeTarget::AudioVolumeDb: {
 		const float mul = obs_source_get_volume(source);
-		item.before = volume_db(mul);
+		before = volume_db(mul);
 		entry["before_mul"] = mul;
-		item.label = localized("Proposal.AudioVolumeDb", {change.source});
 		break;
 	}
 	case ChangeTarget::AudioMonitoring: {
@@ -340,32 +446,33 @@ bool prepare_audio(const Change &change, json &entry, ProposalItem &item, std::s
 			error = "monitoring must be \"off\" or \"monitor_and_output\"";
 			return false;
 		}
-		item.before = monitoring_name(obs_source_get_monitoring_enabled(source));
-		item.label = localized("Proposal.AudioMonitoring", {change.source});
+		before = monitoring_name(obs_source_get_monitoring_enabled(source));
 		break;
 	}
 	case ChangeTarget::AudioSyncOffsetMs: {
 		const int64_t ns = obs_source_get_sync_offset(source);
-		item.before = ns / 1000000;
+		before = ns / 1000000;
 		entry["before_ns"] = ns;
-		item.label = localized("Proposal.AudioSyncOffsetMs", {change.source});
 		break;
 	}
 	case ChangeTarget::AudioTracks: {
 		const uint32_t mixers = obs_source_get_audio_mixers(source);
-		item.before = mixers_to_tracks(mixers);
+		before = mixers_to_tracks(mixers);
 		entry["before_mixers"] = mixers;
-		item.label = localized("Proposal.AudioTracks", {change.source});
 		break;
 	}
 	default:
 		error = "unsupported audio target";
 		return false;
 	}
+	const UiText &ui = ui_text();
+	item.label = localized("Proposal.AudioProperty", {change.source, ui.obs(audio_property_key(change.target))});
+	item.before = audio_value_text(change.target, before, ui);
+	item.after = audio_value_text(change.target, change.value, ui);
 	return true;
 }
 
-bool prepare_output(const Change &change, const OutputActivity &activity, json &entry, ProposalItem &item,
+bool prepare_output(const Change &change, const OutputActivity &activity, json &entry, json &before, ProposalItem &item,
 		    std::string &error)
 {
 	if (settings_dialog_open()) {
@@ -385,6 +492,8 @@ bool prepare_output(const Change &change, const OutputActivity &activity, json &
 	}
 	const OutputMode mode = output_mode(config);
 
+	const UiText &ui = ui_text();
+	std::string path;
 	std::string old_text;
 	std::string new_text;
 	if (key.kind == OutputKey::Kind::Config) {
@@ -394,8 +503,10 @@ bool prepare_output(const Change &change, const OutputActivity &activity, json &
 		}
 		const char *current = config_get_string(config, key.container.c_str(), key.name.c_str());
 		old_text = text_or_empty(current);
-		item.before = current ? json(old_text) : json();
-		item.after = new_text;
+		before = current ? json(old_text) : json();
+		path = output_setting_label(change.key, ui);
+		item.before = output_setting_value(change.key, before, ui);
+		item.after = output_setting_value(change.key, json(new_text), ui);
 		entry["before_user_set"] = config_has_user_value(config, key.container.c_str(), key.name.c_str());
 	}
 
@@ -419,21 +530,25 @@ bool prepare_output(const Change &change, const OutputActivity &activity, json &
 			return false;
 		}
 		PropertiesPtr props(obs_get_encoder_properties(encoder_id.c_str()));
-		if (!obs_properties_get(props.get(), key.name.c_str())) {
+		obs_property_t *property = obs_properties_get(props.get(), key.name.c_str());
+		if (!property) {
 			error = "the current encoder " + encoder_id + " has no setting " + key.name;
 			return false;
 		}
 		const json current = read_profile_json(key.container);
 		const bool present = current.is_object() && current.contains(key.name);
 		if (present) {
-			item.before = current[key.name];
+			before = current[key.name];
 		} else {
 			OBSDataAutoRelease defaults = obs_encoder_defaults(encoder_id.c_str());
 			const json values = data_to_json(defaults, true);
-			item.before = values.contains(key.name) ? values[key.name] : json();
+			before = values.contains(key.name) ? values[key.name] : json();
 		}
 		entry["before_present"] = present;
-		item.after = change.value;
+		path = encoder_setting_label(key.kind == OutputKey::Kind::RecordEncoderJson,
+					     property_label(property, key.name), ui);
+		item.before = property_value_text(property, before);
+		item.after = property_value_text(property, change.value);
 	}
 	entry["file_or_section"] = key.container;
 	entry["name"] = key.name;
@@ -441,7 +556,7 @@ bool prepare_output(const Change &change, const OutputActivity &activity, json &
 	entry["video"] = is_video_setting_key(change.key);
 	item.label = localized(change.target == ChangeTarget::VideoSetting ? "Proposal.VideoSetting"
 									   : "Proposal.OutputSetting",
-			       {change.key});
+			       {path.empty() ? change.key : path});
 	return true;
 }
 
@@ -454,14 +569,15 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 		 {"filter", change.filter},
 		 {"key", change.key},
 		 {"after", change.value}};
-	item.after = change.value;
+	json before;
 	json id = json::array({target_name(change.target)});
+	const UiText &ui = ui_text();
 
 	bool ok = false;
 	switch (change.target) {
 	case ChangeTarget::SourceSetting:
 	case ChangeTarget::FilterSetting:
-		ok = prepare_source_setting(change, entry, item, error);
+		ok = prepare_source_setting(change, entry, before, item, error);
 		id.insert(id.end(), {change.source, change.filter, change.key});
 		break;
 	case ChangeTarget::SourceVisibility: {
@@ -471,7 +587,9 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 			error = "scene item not found: " + change.source + " in " + change.scene;
 			break;
 		}
-		item.before = obs_sceneitem_visible(scene_item);
+		before = obs_sceneitem_visible(scene_item);
+		item.before = bool_value_text(before, ui.obs, "Show", "Hide", ui);
+		item.after = bool_value_text(change.value, ui.obs, "Show", "Hide", ui);
 		item.label = localized("Proposal.SourceVisibility", {change.scene, change.source});
 		id.insert(id.end(), {change.scene, change.source});
 		ok = true;
@@ -481,7 +599,9 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 		Located located;
 		if (!locate_source(change, true, located, error))
 			break;
-		item.before = obs_source_enabled(located.filter);
+		before = obs_source_enabled(located.filter);
+		item.before = bool_value_text(before, ui.plugin, "Value.Enabled", "Value.Disabled", ui);
+		item.after = bool_value_text(change.value, ui.plugin, "Value.Enabled", "Value.Disabled", ui);
 		item.label = localized("Proposal.FilterEnabled", {change.source, change.filter});
 		id.insert(id.end(), {change.source, change.filter});
 		ok = true;
@@ -492,17 +612,17 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 	case ChangeTarget::AudioMonitoring:
 	case ChangeTarget::AudioSyncOffsetMs:
 	case ChangeTarget::AudioTracks:
-		ok = prepare_audio(change, entry, item, error);
+		ok = prepare_audio(change, entry, before, item, error);
 		id.push_back(change.source);
 		break;
 	case ChangeTarget::OutputSetting:
 	case ChangeTarget::VideoSetting:
-		ok = prepare_output(change, activity, entry, item, error);
+		ok = prepare_output(change, activity, entry, before, item, error);
 		// 出力の設定は対象の種類によらず同じキーを指すため、キーだけで識別する
 		id = json::array({"output", change.key});
 		break;
 	}
-	entry["before"] = item.before;
+	entry["before"] = before;
 	item.target_id = dump_json(id);
 	return ok;
 }
@@ -1213,7 +1333,8 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 		}
 		item.label = localized("Proposal.AddSource", {parent_name, request.name, type_name});
 	}
-	item.after = {{"kind", kind->name}, {"name", request.name}, {"settings", request.settings}};
+	item.addition = true;
+	item.after = add_settings_text(kind->obs_id, request.settings);
 	item.target_id = dump_json(json::array({"add", parent_name, request.name}));
 	proposal.items.push_back(std::move(item));
 	proposal.apply_data = {{"kind", "add"},

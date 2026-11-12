@@ -90,6 +90,8 @@ if(AIA_BUILD_TESTS)
   enable_testing()
   add_executable(aia-core-tests "${CMAKE_CURRENT_SOURCE_DIR}/tests/core-tests.cpp")
   target_link_libraries(aia-core-tests PRIVATE aia-core)
+  # 承認の画面の文言のキーが data/locale にそろっていることを確かめるため、ini を読む
+  target_compile_definitions(aia-core-tests PRIVATE AIA_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME aia-core-tests COMMAND aia-core-tests)
   # API キーの保存は DPAPI を使うため Windows だけで確かめる
   if(WIN32)

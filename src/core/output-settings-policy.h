@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace aia {
 
@@ -22,6 +23,9 @@ OutputSettingClass classify_output_setting(OutputMode mode, const std::string &k
 
 // Video セクションの、obs_frontend_reset_video() で反映する項目
 bool is_video_setting_key(const std::string &key);
+
+// 書き換えてよい config の項目のキーをすべて返す。録画形式のように値によって GuideOnly になる項目も含む
+std::vector<std::string> writable_output_config_keys();
 
 // 録画形式の群。作り直しなしで切り替えられるのは同じ群の中だけ
 int record_format_group(const std::string &format);

@@ -59,6 +59,15 @@ bool is_record_format_key(const std::string &key)
 
 } // namespace
 
+std::vector<std::string> writable_output_config_keys()
+{
+	std::vector<std::string> keys;
+	keys.insert(keys.end(), kSimpleAllowed.begin(), kSimpleAllowed.end());
+	keys.insert(keys.end(), kAdvancedAllowed.begin(), kAdvancedAllowed.end());
+	keys.insert(keys.end(), kVideoKeys.begin(), kVideoKeys.end());
+	return keys;
+}
+
 int record_format_group(const std::string &format)
 {
 	if (format == "hybrid_mp4")
