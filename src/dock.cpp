@@ -248,10 +248,13 @@ void Dock::rebuild()
 	send_button_->setEnabled(state == SessionState::Idle && !at_limit);
 
 	// 新しい内容が見えるよう、配置が決まってスクロールの範囲が広がった時点で末尾へ送る (rangeChanged)。
-	// 範囲が変わらない作り直しにも備え、イベントの処理の後にも一度送る
-	scroll_to_end_ = true;
-	QTimer::singleShot(0, this, [this] {
-		scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum());
+	// 範囲が変わらない作り直しにも備え、イベントの処理の後にも一度送る。
+	// 空の会話では、ヘルプ文が最初に目に入るよう先頭を見せる
+	const bool to_end = !entries.empty();
+	scroll_to_end_ = to_end;
+	QTimer::singleShot(0, this, [this, to_end] {
+		QScrollBar *bar = scroll_->verticalScrollBar();
+		bar->setValue(to_end ? bar->maximum() : bar->minimum());
 		QTimer::singleShot(200, this, [this] { scroll_to_end_ = false; });
 	});
 }
