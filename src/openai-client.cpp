@@ -1,8 +1,11 @@
 #include "openai-client.h"
 
+#include "core/stream.h"
+
 #include <curl/curl.h>
 
 #include <chrono>
+#include <functional>
 
 namespace aia {
 
@@ -17,9 +20,10 @@ constexpr long kTimeoutSeconds = 180;
 // "Timeout was reached" で必ず失敗した (docs/logs/2026-11-12-tls-renegotiation-timeout.md)
 constexpr long kConnectTimeoutSeconds = kTimeoutSeconds;
 
-size_t append_body(char *data, size_t size, size_t count, void *user)
+// 届いた本文を受け取り先の関数に渡す
+size_t write_body(char *data, size_t size, size_t count, void *user)
 {
-	static_cast<std::string *>(user)->append(data, size * count);
+	(*static_cast<const std::function<void(const char *, size_t)> *>(user))(data, size * count);
 	return size * count;
 }
 
@@ -34,15 +38,43 @@ int check_cancel(void *user, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
 
 HttpResult OpenAiClient::post_responses(const nlohmann::json &request) const
 {
-	return post(kResponsesUrl, request);
+	return post_json(kResponsesUrl, request);
 }
 
 HttpResult OpenAiClient::post_moderations(const nlohmann::json &request) const
 {
-	return post(kModerationsUrl, request);
+	return post_json(kModerationsUrl, request);
 }
 
-HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request) const
+HttpResult OpenAiClient::post_responses_stream(const nlohmann::json &request,
+					       const std::function<void(const std::string &)> &on_delta) const
+{
+	nlohmann::json body = request;
+	body["stream"] = true;
+	StreamReader reader(on_delta);
+	HttpResult result = post(kResponsesUrl, body, [&reader](const char *data, size_t size) { reader.feed(data, size); });
+	if (!result.transport_error.empty())
+		return result;
+	result.body = reader.finish();
+	if (result.body.is_discarded() || !result.body.is_object())
+		result.transport_error = "invalid json";
+	return result;
+}
+
+HttpResult OpenAiClient::post_json(const char *url, const nlohmann::json &request) const
+{
+	std::string response;
+	HttpResult result = post(url, request, [&response](const char *data, size_t size) { response.append(data, size); });
+	if (!result.transport_error.empty())
+		return result;
+	result.body = nlohmann::json::parse(response, nullptr, false);
+	if (result.body.is_discarded() || !result.body.is_object())
+		result.transport_error = "invalid json";
+	return result;
+}
+
+HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request,
+			      const std::function<void(const char *, size_t)> &sink) const
 {
 	HttpResult result;
 
@@ -53,7 +85,6 @@ HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request) co
 	}
 
 	const std::string body = request.dump();
-	std::string response;
 	curl_slist *headers = nullptr;
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 	headers = curl_slist_append(headers, ("Authorization: Bearer " + api_key_).c_str());
@@ -62,8 +93,8 @@ HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request) co
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &append_body);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &write_body);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, const_cast<std::function<void(const char *, size_t)> *>(&sink));
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSeconds);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, kTimeoutSeconds);
 	if (cancel_) {
@@ -80,14 +111,8 @@ HttpResult OpenAiClient::post(const char *url, const nlohmann::json &request) co
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
 
-	if (rc != CURLE_OK) {
+	if (rc != CURLE_OK)
 		result.transport_error = curl_easy_strerror(rc);
-		return result;
-	}
-
-	result.body = nlohmann::json::parse(response, nullptr, false);
-	if (result.body.is_discarded() || !result.body.is_object())
-		result.transport_error = "invalid json";
 	return result;
 }
 

@@ -25,6 +25,14 @@ public:
 	using Done =
 		std::function<void(long http_status, const nlohmann::json &body, const std::string &transport_error)>;
 	virtual void send(Endpoint endpoint, const nlohmann::json &request, Done done) = 0;
+	// 応答をストリーミングで受け取る送り方。文の差分を届いた順に delta に渡し (メインスレッドで呼ぶ)、
+	// 最後に応答の全体を done に渡す。既定はストリーミングせずに send で送る
+	using Delta = std::function<void(const std::string &text)>;
+	virtual void send_stream(const nlohmann::json &request, Delta delta, Done done)
+	{
+		(void)delta;
+		send(Endpoint::Responses, request, std::move(done));
+	}
 	virtual void cancel() = 0;
 };
 
@@ -99,8 +107,13 @@ public:
 	const ProposalBook &proposals() const { return proposals_; }
 	const ModelConfig &config() const { return config_; }
 
+	// 届いている途中の回答の文。応答を待つ間だけ空でない
+	const std::string &streaming_text() const { return streaming_text_; }
+
 	// 状態や表示が変わるたびに呼ぶ
 	void set_on_changed(std::function<void()> fn) { on_changed_ = std::move(fn); }
+	// 回答の文が届くたびに呼ぶ。履歴の作り直しを避け、届いている途中の文だけを更新するため、on_changed とは分ける
+	void set_on_streaming(std::function<void()> fn) { on_streaming_ = std::move(fn); }
 
 private:
 	void start_request();
@@ -128,6 +141,8 @@ private:
 	// 世代の番号。消去や中止の後に届いた古い応答を捨てる
 	int generation_ = 0;
 	std::function<void()> on_changed_;
+	std::function<void()> on_streaming_;
+	std::string streaming_text_;
 };
 
 } // namespace aia

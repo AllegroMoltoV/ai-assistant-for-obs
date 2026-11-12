@@ -11,6 +11,7 @@
 #include "core/responses.h"
 #include "core/secrets.h"
 #include "core/session.h"
+#include "core/stream.h"
 #include "core/tool-definitions.h"
 #include "core/tool-output.h"
 
@@ -944,6 +945,39 @@ void test_session_read_tool_loop()
 
 // 応答に本文も道具の呼び出しも無いときと、出力の上限で切れたときも、画面に知らせを出す。
 // 依頼者の実機の確認で、ソースの一覧を頼んだら何も表示されずに終わった
+// ストリーミングの応答は、届く単位が行や文字の途中で切れる。切れ目によらず同じ差分と同じ最後の応答を読む
+void test_stream_reader()
+{
+	const std::string sse =
+		"event: response.created\ndata: {\"type\":\"response.created\"}\n\n"
+		"data: {\"type\":\"response.output_text.delta\",\"delta\":\"音が\"}\n\n"
+		"data: {\"type\":\"response.output_text.delta\",\"delta\":\"二重です\"}\r\n\r\n"
+		"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n";
+	for (const size_t step : {sse.size(), size_t{1}, size_t{7}}) {
+		std::string text;
+		StreamReader reader([&text](const std::string &delta) { text += delta; });
+		for (size_t i = 0; i < sse.size(); i += step)
+			reader.feed(sse.data() + i, std::min(step, sse.size() - i));
+		const json body = reader.finish();
+		CHECK(text == "音が二重です");
+		CHECK(body.value("status", "") == "completed");
+	}
+
+	// 認証の失敗などは SSE ではなく JSON の本文で返る
+	StreamReader plain(nullptr);
+	const std::string error_body = R"({"error":{"code":"invalid_api_key","message":"bad"}})";
+	plain.feed(error_body.data(), error_body.size());
+	CHECK(plain.finish()["error"]["code"] == "invalid_api_key");
+
+	// 応答の途中の誤り
+	StreamReader failed(nullptr);
+	const std::string error_event = "data: {\"type\":\"error\",\"code\":\"server_error\",\"message\":\"x\"}\n\n";
+	failed.feed(error_event.data(), error_event.size());
+	const json failed_body = failed.finish();
+	CHECK(failed_body["error"]["code"] == "server_error");
+	CHECK(!parse_response(200, failed_body).ok);
+}
+
 void test_session_empty_or_cut_reply()
 {
 	FakeTransport transport;
@@ -1610,6 +1644,7 @@ int main()
 	test_conversation_length_and_carry_over();
 	test_session_read_tool_loop();
 	test_session_empty_or_cut_reply();
+	test_stream_reader();
 	test_session_approval();
 	test_session_reject_and_failures();
 	test_session_remove();

@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <functional>
 #include <string>
 
 namespace aia {
@@ -29,9 +30,16 @@ public:
 	HttpResult post_responses(const nlohmann::json &request) const;
 	// 送る前の検査。v1/moderations は無料 (https://developers.openai.com/api/docs/guides/moderation)
 	HttpResult post_moderations(const nlohmann::json &request) const;
+	// stream: true で送り、文の差分を届いた順に on_delta に渡す。on_delta は作業のスレッドで呼ぶ。
+	// 結果の本文は、stream でない post_responses と同じ形の応答の全体
+	HttpResult post_responses_stream(const nlohmann::json &request,
+					 const std::function<void(const std::string &)> &on_delta) const;
 
 private:
-	HttpResult post(const char *url, const nlohmann::json &request) const;
+	HttpResult post_json(const char *url, const nlohmann::json &request) const;
+	// 届いた本文を sink に渡す。body は呼び出し元が組み立てる
+	HttpResult post(const char *url, const nlohmann::json &request,
+			const std::function<void(const char *, size_t)> &sink) const;
 
 	std::string api_key_;
 	const std::atomic<bool> *cancel_;

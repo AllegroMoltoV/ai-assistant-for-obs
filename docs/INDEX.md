@@ -21,6 +21,7 @@ context compaction で文脈が失われた場合は、この索引から必要�
 | プラグイン自体への質問の確認と、指示文の変更後の場面 01-11 の再実行 | `docs/logs/2026-11-12-about-plugin-check.md` |
 | 色ソースの追加と色の変更の確認 (場面 12 と 13) | `docs/logs/2026-11-12-color-source-check.md` |
 | 応答の途中の TLS の再交渉で 10 秒を超える応答が失敗した件の切り分けと対策 | `docs/logs/2026-11-12-tls-renegotiation-timeout.md` |
+| ストリーミングと長い一覧、色ソースの追加と削除の、ポータブル版の OBS での確認 (手順は `tools/obs-e2e/`) | `docs/logs/2026-11-12-streaming-e2e.md` |
 | 日本語の文言の問題点 (OBS の訳との用語のずれ、文章の規約、yomiyasu の lint) | `docs/reports/2026-11-12-japanese-wording-review.md` |
 | 計画の親課題 | `bd show ai-assistant-for-obs-oea` |
 | 実行ログ (生の出力。git 追跡対象外) | `.logs/` |

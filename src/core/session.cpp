@@ -68,12 +68,23 @@ void Session::start_request()
 		const int generation = generation_;
 		const json request =
 			build_request(config_, instructions_, tools_, conversation_.request_items());
-		transport_.send(Endpoint::Responses, request,
-				[this, generation](long status, const json &body, const std::string &error) {
-					if (generation != generation_)
-						return;
-					handle_response(status, body, error);
-				});
+		streaming_text_.clear();
+		transport_.send_stream(
+			request,
+			[this, generation](const std::string &text) {
+				if (generation != generation_)
+					return;
+				streaming_text_ += text;
+				if (on_streaming_)
+					on_streaming_();
+			},
+			[this, generation](long status, const json &body, const std::string &error) {
+				if (generation != generation_)
+					return;
+				// 届いた文は応答の全体として履歴に入るため、途中の文は消す
+				streaming_text_.clear();
+				handle_response(status, body, error);
+			});
 	});
 }
 
@@ -304,6 +315,8 @@ void Session::cancel()
 		return;
 	++generation_;
 	transport_.cancel();
+	// 中止した回答の途中の文は履歴に残さない
+	streaming_text_.clear();
 	conversation_.add_notice(kNoticeCancelled);
 	state_ = SessionState::Idle;
 	changed();
@@ -315,6 +328,7 @@ void Session::clear()
 	if (state_ == SessionState::Waiting || state_ == SessionState::CarryingOver)
 		transport_.cancel();
 	conversation_.clear();
+	streaming_text_.clear();
 	proposals_.clear();
 	steps_ = 0;
 	state_ = SessionState::Idle;

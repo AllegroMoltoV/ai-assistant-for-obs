@@ -15,6 +15,7 @@
 #define NOMINMAX
 #endif
 
+#include "core/api-key-file.h"
 #include "core/change-request.h"
 #include "core/conversation.h"
 #include "core/instructions.h"
@@ -1272,6 +1273,25 @@ int command_language(int argc, char **argv)
 	return mismatches == 0 ? 0 : 1;
 }
 
+// 検証用のポータブル版の OBS のために、.env の API キーをプラグインと同じ形式 (DPAPI) で保存する。キーは表示しない
+int command_save_key(int argc, char **argv)
+{
+	if (argc < 4) {
+		std::fprintf(stderr, "usage: aia-model-eval save-key <.env> <plugin_config の ai-assistant-for-obs のフォルダー>\n");
+		return 2;
+	}
+	const std::string key = read_api_key(argv[2]);
+	if (key.empty()) {
+		std::fprintf(stderr, "OPENAI_API_KEY was not found in the env file\n");
+		return 2;
+	}
+	const fs::path dir = fs::u8path(argv[3]);
+	fs::create_directories(dir);
+	const ApiKeyStatus status = save_api_key_file(dir, key);
+	std::printf("save-key: %s\n", api_key_status_name(status));
+	return status == ApiKeyStatus::Ok ? 0 : 1;
+}
+
 // 応答に時間のかかる要求を、プラグインと同じ通信のコードで送り、かかった時間と失敗の理由を出す。
 // 実機で 25 秒前後に "Timeout was reached" で切れた現象を切り分けるため
 int command_slow(int argc, char **argv)
@@ -1332,6 +1352,27 @@ int command_slow(int argc, char **argv)
 		curl_global_cleanup();
 		return rc == CURLE_OK ? 0 : 1;
 	}
+	if (argc >= 4 && std::strcmp(argv[3], "--stream") == 0) {
+		// プラグインと同じストリーミングの受け取りで、最初の差分までの時間と、差分をつないだ文が最後の本文と一致することを見る
+		const auto started = std::chrono::steady_clock::now();
+		double first_ms = -1;
+		int deltas = 0;
+		std::string joined;
+		const HttpResult result = client.post_responses_stream(request, [&](const std::string &text) {
+			if (first_ms < 0)
+				first_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started)
+						   .count();
+			++deltas;
+			joined += text;
+		});
+		const ParsedResponse parsed = parse_response(result.http_status, result.body);
+		std::printf("stream: http=%ld elapsed_ms=%.0f first_delta_ms=%.0f deltas=%d transport_error=\"%s\" "
+			    "status=%s joined_equals_final=%s text_bytes=%zu\n",
+			    result.http_status, result.elapsed_ms, first_ms, deltas, result.transport_error.c_str(),
+			    parsed.status.c_str(), joined == parsed.text ? "yes" : "no", parsed.text.size());
+		curl_global_cleanup();
+		return result.transport_error.empty() && joined == parsed.text ? 0 : 1;
+	}
 	const HttpResult result = client.post_responses(request);
 	const ParsedResponse parsed = parse_response(result.http_status, result.body);
 	std::printf("http=%ld elapsed_ms=%.0f transport_error=\"%s\" status=%s output_tokens=%lld text_bytes=%zu\n",
@@ -1349,6 +1390,8 @@ int main(int argc, char **argv)
 		return command_run(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "report") == 0)
 		return command_report(argc, argv);
+	if (argc >= 2 && std::strcmp(argv[1], "save-key") == 0)
+		return command_save_key(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "slow") == 0)
 		return command_slow(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "language") == 0)

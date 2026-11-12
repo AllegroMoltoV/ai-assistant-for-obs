@@ -71,6 +71,10 @@ private:
 	int busy_dots_ = 0;
 	// 会話の欄の中身が見切れない幅を、ドックの最小幅にする
 	void update_minimum_width();
+	// 届いている途中の回答の文を、履歴の末尾の枠に出す
+	void update_streaming();
+	// 届いている途中の回答の文を出すラベル。作り直しで消える
+	QLabel *stream_label_ = nullptr;
 };
 
 } // namespace aia

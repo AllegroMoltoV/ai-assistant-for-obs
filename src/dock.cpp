@@ -183,6 +183,7 @@ Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport>
 	// AI の回答を、利用者が OBS で選んだ表示言語に合わせる
 	session_->set_locale(locale);
 	session_->set_on_changed([this] { rebuild(); });
+	session_->set_on_streaming([this] { update_streaming(); });
 	rebuild();
 }
 
@@ -190,6 +191,34 @@ Dock::~Dock()
 {
 	// 破棄の途中で表示を作り直さない
 	session_->set_on_changed(nullptr);
+	session_->set_on_streaming(nullptr);
+}
+
+void Dock::update_streaming()
+{
+	const std::string &value = session_->streaming_text();
+	if (value.empty())
+		return;
+	// 最初の文が届いたら、AI アシスタントの発言の枠を履歴の末尾 (伸びる余白の前) に足す
+	if (!stream_label_) {
+		auto *frame = card(history_, "aiaAssistant");
+		auto *layout = new QVBoxLayout(frame);
+		auto *who = new QLabel(text("Dock.Assistant"), frame);
+		who->setStyleSheet("font-weight: bold;");
+		layout->addWidget(who);
+		stream_label_ = wrapped_label(QString(), frame);
+		stream_label_->setTextFormat(Qt::MarkdownText);
+		stream_label_->setOpenExternalLinks(true);
+		layout->addWidget(stream_label_);
+		history_layout_->insertWidget(history_layout_->count() - 1, frame);
+	}
+	// 末尾を見ている間だけ、文が伸びるのに合わせて末尾へ送る。読み返している途中では動かさない
+	QScrollBar *bar = scroll_->verticalScrollBar();
+	scroll_to_end_ = bar->value() >= bar->maximum() - 40;
+	stream_label_->setText(utf8(value));
+	// 文が届き始めたら、考えています… の表示は止める。中止のボタンは残す
+	busy_timer_->stop();
+	status_label_->clear();
 }
 
 bool Dock::eventFilter(QObject *watched, QEvent *event)
@@ -241,6 +270,7 @@ void Dock::rebuild()
 			widget->deleteLater();
 		delete item;
 	}
+	stream_label_ = nullptr;
 
 	const auto &entries = session_->conversation().display();
 	if (entries.empty())
@@ -272,6 +302,8 @@ void Dock::rebuild()
 	}
 	status_label_->setVisible(state != SessionState::Idle);
 	cancel_button_->setVisible(busy);
+	// 作り直しの間も届いている途中の文を見せ続ける
+	update_streaming();
 
 	const bool at_limit = conversation.at_length_limit();
 	gauge_->set_percent(conversation.length_percent());
