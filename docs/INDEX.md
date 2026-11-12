@@ -18,6 +18,7 @@ context compaction で文脈が失われた場合は、この索引から必要�
 | 会話の試験 3: 試験 2 で守られなかった決まりへの修正の確認 | `docs/logs/2026-11-12-conversation-review-3.md` |
 | 古い状態で答えない決まりの確認 (利用者が途中で設定を変える場面) | `docs/logs/2026-11-12-state-change-check.md` |
 | 回答と要約の言語の確認 (OBS の表示言語と利用者の言語の 4 通り) | `docs/logs/2026-11-12-language-check.md` |
+| プラグイン自体への質問の確認と、指示文の変更後の場面 01-11 の再実行 | `docs/logs/2026-11-12-about-plugin-check.md` |
 | 日本語の文言の問題点 (OBS の訳との用語のずれ、文章の規約、yomiyasu の lint) | `docs/reports/2026-11-12-japanese-wording-review.md` |
 | 計画の親課題 | `bd show ai-assistant-for-obs-oea` |
 | 実行ログ (生の出力。git 追跡対象外) | `.logs/` |

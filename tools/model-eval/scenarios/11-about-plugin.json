@@ -1,0 +1,124 @@
+{
+  "title": "プラグイン自体についての質問 (料金・保存・長い会話)",
+  "first_message": "このAIアシスタントって使うとお金かかるの？",
+  "user_replies": [
+    "会話の内容ってどこかに保存される？",
+    "会話が長くなったらどうすればいいの？"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": false,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "nvenc"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 24H2 (build 26100.2314)",
+      "video": {
+        "base_resolution": "1920x1080",
+        "output_resolution": "1920x1080",
+        "fps": "60"
+      },
+      "output": {
+        "mode": "Simple",
+        "settings": {
+          "SimpleOutput/StreamEncoder": "nvenc",
+          "SimpleOutput/VBitrate": 6000,
+          "SimpleOutput/ABitrate": 160,
+          "SimpleOutput/RecFormat2": "hybrid_mp4",
+          "SimpleOutput/RecQuality": "Stream"
+        }
+      },
+      "active": {
+        "streaming": false,
+        "recording": false,
+        "replay_buffer": false,
+        "virtual_camera": false
+      },
+      "stats": {
+        "active_fps": 60.0,
+        "average_frame_render_time_ms": 1.0,
+        "frames_missed_due_to_rendering_lag": "0 / 9000 (0.0%)",
+        "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)",
+        "dropped_frames_network": "0 / 0 (0.0%)",
+        "cpu_usage_percent": 4.2,
+        "memory_mb": 430
+      }
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "ゲーム",
+      "scenes": [
+        {
+          "name": "ゲーム",
+          "items": [
+            {
+              "source": "ゲームキャプチャ",
+              "type": "game_capture",
+              "visible": true
+            },
+            {
+              "source": "マイク",
+              "type": "wasapi_input_capture",
+              "visible": true
+            }
+          ]
+        }
+      ],
+      "audio_sources": [
+        {
+          "name": "デスクトップ音声",
+          "type": "wasapi_output_capture",
+          "volume_db": 0.0,
+          "muted": false,
+          "monitoring": "off",
+          "sync_offset_ms": 0,
+          "tracks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "name": "マイク",
+          "type": "wasapi_input_capture",
+          "volume_db": 0.0,
+          "muted": false,
+          "monitoring": "off",
+          "sync_offset_ms": 0,
+          "tracks": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    "get_source_details": {},
+    "read_log": [
+      "20:00:01.330: OBS 33.0.1 (64-bit, windows)",
+      "20:00:02.880: ==== Startup complete ==============================================="
+    ]
+  },
+  "judge": {
+    "cause": "プラグイン自体についての質問。断らず、指示文の事実で答える。料金は利用者の OpenAI アカウントに請求されること、会話はファイルに保存しないこと、長くなったら会話を要約し新規会話を開始のボタンか新しい会話を使うこと。Web 検索も OBS の道具も使わない。",
+    "cause_keywords": [
+      [
+        "OpenAI"
+      ],
+      [
+        "保存"
+      ],
+      [
+        "要約",
+        "新しい会話"
+      ]
+    ],
+    "forbid_tools": true
+  }
+}
