@@ -1,5 +1,7 @@
 # AI Assistant for OBS Studio / OBS Studio 向け AI アシスタント
 
+[配信プラグイン倉庫くん](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs) にも掲載しています。 / Also listed on [Plugin Soko-kun](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs?lang=en).
+
 配信のトラブルを、OBS Studio のドックのチャットで相談できるプラグインです。AI アシスタントが OBS の状態とログを読み、Web を調べて原因を説明します。OBS の中で直せるものは、利用者の承認を得てその場で直します。
 
 > このプラグインは無料です。ただし、OpenAI API の利用料金は、利用者ご自身の OpenAI アカウントに別途請求されます。利用には、ご自身で発行した OpenAI の API キーが必要です。OpenAI API の利用は、利用者ご自身のアカウントと責任で行います。詳しくは「[利用者の責任と無保証](#利用者の責任と無保証)」を参照してください。
