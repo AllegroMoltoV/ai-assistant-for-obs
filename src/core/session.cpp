@@ -309,12 +309,6 @@ void Session::cancel()
 	changed();
 }
 
-void Session::show_help()
-{
-	conversation_.add_notice(kNoticeHelp);
-	changed();
-}
-
 void Session::clear()
 {
 	++generation_;

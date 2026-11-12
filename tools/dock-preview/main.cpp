@@ -15,6 +15,8 @@
 #include <QElapsedTimer>
 #include <QLabel>
 #include <QPushButton>
+#include <QStyle>
+#include <QStyleOptionButton>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QTimer>
@@ -80,13 +82,15 @@ std::deque<json> echo_script()
 				  14000));
 	script.push_back(response(json::array({message_item(
 					  "マイクの音声モニタリングを「モニターオフ」にしました。もう一度、声が二重に聞こえるか確かめてください。")}),
-				  16000));
+				  70000));
 	return script;
 }
 
 class ScriptedTransport : public aia::Transport {
 public:
 	explicit ScriptedTransport(std::deque<json> script) : script_(std::move(script)) {}
+	// 応答を返すまでの時間。読み込み中の表示を確かめるときに延ばす
+	int delay_ms = 30;
 
 	void send(aia::Endpoint endpoint, const json &request, Done done) override
 	{
@@ -101,7 +105,7 @@ public:
 		} else {
 			body = response(json::array({message_item("(台本の終わり)")}), 0);
 		}
-		QTimer::singleShot(30, [done, body] { done(200, body, std::string()); });
+		QTimer::singleShot(delay_ms, [done, body] { done(200, body, std::string()); });
 	}
 	void cancel() override {}
 
@@ -160,15 +164,31 @@ int report_clipped(QWidget *root, const QString &scene, FILE *out)
 	for (QPushButton *button : root->findChildren<QPushButton *>()) {
 		if (!button->isVisibleTo(root))
 			continue;
-		// 推奨の幅は最低幅を含むため、文言そのものの幅と比べる
-		const int needed = button->fontMetrics().horizontalAdvance(button->text()) + 8;
-		if (needed > button->width()) {
+		// スタイルシートの余白を除いた、文言を描く領域の幅と比べる
+		QStyleOptionButton option;
+		option.initFrom(button);
+		option.text = button->text();
+		const QRect contents = button->style()->subElementRect(QStyle::SE_PushButtonContents, &option, button);
+		const int needed = button->fontMetrics().horizontalAdvance(button->text());
+		if (needed > contents.width()) {
 			++clipped;
-			std::fprintf(out, "CLIPPED %s: button width=%d needed=%d text=%s\n", qUtf8Printable(scene),
-				     button->width(), needed, qUtf8Printable(button->text()));
+			std::fprintf(out, "CLIPPED %s: button contents=%d needed=%d text=%s\n", qUtf8Printable(scene),
+				     contents.width(), needed, qUtf8Printable(button->text()));
 		}
 	}
 	return clipped;
+}
+
+// 会話の欄の中身の最小幅が、表示の幅に収まることを確かめる。収まらなければ横に見切れる
+int report_overflow(aia::Dock &dock, const QString &scene, FILE *out)
+{
+	auto *scroll = dock.findChild<QScrollArea *>();
+	const int content = scroll->widget()->minimumSizeHint().width();
+	const int viewport = scroll->viewport()->width();
+	if (content <= viewport)
+		return 0;
+	std::fprintf(out, "OVERFLOW %s: content minimum=%d viewport=%d\n", qUtf8Printable(scene), content, viewport);
+	return 1;
 }
 
 int capture(aia::Dock &dock, const QString &dir, const QString &scene, int width, int height, FILE *out)
@@ -177,12 +197,14 @@ int capture(aia::Dock &dock, const QString &dir, const QString &scene, int width
 	wait_ms(400);
 	const QString name = QString("%1-%2x%3").arg(scene).arg(width).arg(height);
 	auto *scroll = dock.findChild<QScrollArea *>();
-	std::fprintf(out, "%s: scroll=%d/%d\n", qUtf8Printable(name), scroll->verticalScrollBar()->value(),
+	// ドックは最小幅より狭くは縮まないため、実際の幅も出す
+	std::fprintf(out, "%s: dock=%dx%d min_width=%d scroll=%d/%d\n", qUtf8Printable(name), dock.width(),
+		     dock.height(), dock.minimumWidth(), scroll->verticalScrollBar()->value(),
 		     scroll->verticalScrollBar()->maximum());
 	dock.grab().save(dir + "/" + name + ".png");
 	// スクロールの範囲の中身も、見えない部分を含めて画像にする
 	scroll->widget()->grab().save(dir + "/" + name + "-content.png");
-	return report_clipped(&dock, name, out);
+	return report_clipped(&dock, name, out) + report_overflow(dock, name, out);
 }
 
 bool click_button(QWidget &root, const QString &label)
@@ -261,8 +283,16 @@ int main(int argc, char **argv)
 	int clipped = 0;
 	int failed = 0;
 
+	// OBS の既定のテーマ (Yami、文字の大きさ 10、密度 1) のボタンと入力欄の余白と文字の大きさに近づける。
+	// テーマの完全な再現ではないため、色や細かな余白は実機と違う
+	app.setStyleSheet("* { font-size: 10pt; }"
+			  "QPushButton { padding: 4px 16px; border: 1px solid #5a5a5a; border-radius: 4px; }"
+			  "QPlainTextEdit { padding: 4px 10px; }");
+
 	FakeTools tools;
-	aia::Dock dock(tools, locale, std::make_unique<ScriptedTransport>(echo_script()));
+	auto transport_owner = std::make_unique<ScriptedTransport>(echo_script());
+	ScriptedTransport *transport = transport_owner.get();
+	aia::Dock dock(tools, locale, std::move(transport_owner));
 	dock.show();
 
 	// 空の会話の画面。OBS の初期の配置に近い縦長と、最小幅と、広い幅
@@ -270,22 +300,56 @@ int main(int argc, char **argv)
 	clipped += capture(dock, dir, "1-empty", 300, 900, out);
 	clipped += capture(dock, dir, "1-empty", 450, 700, out);
 
-	// 「?」のボタンで会話に出すヘルプ文
+	// ドックを最小幅より狭くしようとしても、会話の欄が横に見切れないこと
+	clipped += capture(dock, dir, "1-empty", 200, 700, out);
+
+	// 「?」のボタンで別の窓に出すヘルプ文。候補のボタンは会話の欄に残る
 	if (!click_button(dock, "?")) {
 		std::fprintf(out, "FAILED: help button not found\n");
 		++failed;
 	}
-	clipped += capture(dock, dir, "2-help", 300, 600, out);
+	wait_ms(400);
+	QWidget *help = nullptr;
+	for (QWidget *top : QApplication::topLevelWidgets()) {
+		if (top != &dock && top->isVisible())
+			help = top;
+	}
+	if (!help) {
+		std::fprintf(out, "FAILED: help window not shown\n");
+		++failed;
+	} else {
+		help->grab().save(dir + "/2-help-window.png");
+		clipped += report_clipped(help, "2-help-window", out);
+		help->close();
+	}
 
-	// 「新しい会話」から、候補のボタンで相談を始め、提案の画面まで進める
-	if (!click_button(dock, module_text("Dock.Clear")))
-		std::fprintf(out, "NOTE: new conversation button not found by label\n");
-	wait_ms(200);
+	// 候補のボタンで相談を始める。応答を待つ間、状態の文の末尾の点が増えていくこと
+	transport->delay_ms = 1500;
 	if (!click_button(dock, module_text("Chip.Echo"))) {
-		std::fprintf(out, "FAILED: chip not found\n");
+		std::fprintf(out, "FAILED: chips disappeared after help\n");
 		++failed;
 	}
-	wait_ms(800);
+	wait_ms(300);
+	QLabel *status = nullptr;
+	for (QLabel *label : dock.findChildren<QLabel *>()) {
+		if (label->isVisible() && label->text().startsWith(module_text("Dock.Thinking")))
+			status = label;
+	}
+	if (!status) {
+		std::fprintf(out, "FAILED: thinking status not shown\n");
+		++failed;
+	} else {
+		const QString first = status->text();
+		wait_ms(450);
+		const QString second = status->text();
+		std::fprintf(out, "busy: '%s' -> '%s'\n", qUtf8Printable(first), qUtf8Printable(second));
+		if (first == second) {
+			std::fprintf(out, "FAILED: thinking status does not animate\n");
+			++failed;
+		}
+	}
+	transport->delay_ms = 30;
+	wait_ms(3500);
 	clipped += capture(dock, dir, "3-proposal", 300, 700, out);
 
 	// 承認して、結果の回答まで進める

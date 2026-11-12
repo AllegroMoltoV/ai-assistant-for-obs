@@ -13,6 +13,7 @@ class QLabel;
 class QPlainTextEdit;
 class QPushButton;
 class QScrollArea;
+class QTimer;
 class QVBoxLayout;
 
 namespace aia {
@@ -41,7 +42,9 @@ private:
 	QWidget *build_tool_result(const DisplayEntry &entry);
 	QWidget *build_proposal(int proposal_id);
 	QWidget *build_notice(const DisplayEntry &entry);
-	QWidget *build_help();
+	QWidget *build_help(QWidget *parent);
+	// ヘルプ文を別の窓で出す (「?」のボタン)
+	void show_help_window();
 
 	// 送り先は Session より後に破棄する。破棄の後に届いた結果を捨てるため
 	std::unique_ptr<Transport> transport_;
@@ -52,7 +55,7 @@ private:
 	QVBoxLayout *history_layout_ = nullptr;
 	QLabel *status_label_ = nullptr;
 	QPushButton *cancel_button_ = nullptr;
-	// 会話の長さが約 50% に達してから出す、要点を引き継いで新しい会話を始めるボタン
+	// 会話の長さが約 50% に達してから出す、会話を要約して新しい会話を始めるボタン
 	QPushButton *carry_over_button_ = nullptr;
 	// 上限の手前で送信を止めたときの理由
 	QLabel *limit_label_ = nullptr;
@@ -62,6 +65,12 @@ private:
 	QPushButton *send_button_ = nullptr;
 	// 作り直した後、配置が決まってから末尾へ送るための印
 	bool scroll_to_end_ = false;
+	// 応答を待つ間、状態の文の末尾の点を 1 つずつ増やし、読み込み中であることを伝える
+	QTimer *busy_timer_ = nullptr;
+	QString busy_text_;
+	int busy_dots_ = 0;
+	// 会話の欄の中身が見切れない幅を、ドックの最小幅にする
+	void update_minimum_width();
 };
 
 } // namespace aia

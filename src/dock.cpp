@@ -7,6 +7,8 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -19,6 +21,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <set>
 
 namespace aia {
@@ -98,6 +101,8 @@ Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport>
 	scroll_ = new QScrollArea(this);
 	scroll_->setWidgetResizable(true);
 	scroll_->setFrameShape(QFrame::NoFrame);
+	// 横のスクロールバーは出さない。中身はすべて折り返し、折り返せない幅はドックの最小幅で確保する
+	scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	history_ = new QWidget(scroll_);
 	history_layout_ = new QVBoxLayout(history_);
 	scroll_->setWidget(history_);
@@ -108,6 +113,12 @@ Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport>
 	});
 
 	status_label_ = new QLabel(this);
+	busy_timer_ = new QTimer(this);
+	busy_timer_->setInterval(400);
+	connect(busy_timer_, &QTimer::timeout, this, [this] {
+		busy_dots_ = busy_dots_ % 3 + 1;
+		status_label_->setText(busy_text_ + QString(busy_dots_, QLatin1Char('.')));
+	});
 	cancel_button_ = new QPushButton(text("Dock.Cancel"), this);
 	connect(cancel_button_, &QPushButton::clicked, this, [this] { session_->cancel(); });
 	auto *status_row = new QHBoxLayout();
@@ -128,6 +139,8 @@ Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport>
 
 	input_ = new ChatInput(text("Dock.InputPlaceholder"), this);
 	input_->setMaximumHeight(80);
+	// 入力できる場所だと分かるよう、テーマの背景のまま強調色の枠で囲む (依頼者の決定)
+	input_->setStyleSheet("QPlainTextEdit { border: 1px solid palette(highlight); }");
 	input_->installEventFilter(this);
 	gauge_ = new LengthGauge(this);
 	gauge_->setFixedHeight(80);
@@ -144,10 +157,11 @@ Dock::Dock(ToolHost &host, const std::string &locale, std::unique_ptr<Transport>
 	auto *settings_button = new QPushButton(text("Dock.Settings"), this);
 	// 設定画面は非モーダルで開き、配信の操作を妨げない
 	connect(settings_button, &QPushButton::clicked, this, [this] { (new SettingsDialog(window()))->show(); });
+	// 幅はテーマの余白を含めた推奨の幅に任せる。高さに合わせて固定すると、テーマの余白で「?」が見切れる
 	auto *help_button = new QPushButton(QStringLiteral("?"), this);
 	help_button->setToolTip(text("Dock.Help"));
-	help_button->setFixedWidth(help_button->sizeHint().height());
-	connect(help_button, &QPushButton::clicked, this, [this] { session_->show_help(); });
+	// 会話の中に出すと候補のボタンが消えるため、別の窓で出す (依頼者の決定)
+	connect(help_button, &QPushButton::clicked, this, [this] { show_help_window(); });
 	auto *clear_button = new QPushButton(text("Dock.Clear"), this);
 	connect(clear_button, &QPushButton::clicked, this, [this] { session_->clear(); });
 	auto *tool_row = new QHBoxLayout();
@@ -240,14 +254,22 @@ void Dock::rebuild()
 	const SessionState state = session_->state();
 	const Conversation &conversation = session_->conversation();
 	const bool busy = state == SessionState::Waiting || state == SessionState::CarryingOver;
-	if (state == SessionState::Waiting)
-		status_label_->setText(text("Dock.Thinking"));
-	else if (state == SessionState::CarryingOver)
-		status_label_->setText(text("Carry.Running"));
-	else if (state == SessionState::AwaitingApproval)
-		status_label_->setText(text("Dock.AwaitingApproval"));
-	else
-		status_label_->clear();
+	if (busy) {
+		const QString value = text(state == SessionState::Waiting ? "Dock.Thinking" : "Carry.Running");
+		if (value != busy_text_ || !busy_timer_->isActive()) {
+			busy_text_ = value;
+			busy_dots_ = 1;
+			status_label_->setText(busy_text_ + QStringLiteral("."));
+			busy_timer_->start();
+		}
+	} else {
+		busy_timer_->stop();
+		busy_text_.clear();
+		if (state == SessionState::AwaitingApproval)
+			status_label_->setText(text("Dock.AwaitingApproval"));
+		else
+			status_label_->clear();
+	}
 	status_label_->setVisible(state != SessionState::Idle);
 	cancel_button_->setVisible(busy);
 
@@ -264,10 +286,23 @@ void Dock::rebuild()
 	const bool to_end = !entries.empty();
 	scroll_to_end_ = to_end;
 	QTimer::singleShot(0, this, [this, to_end] {
+		update_minimum_width();
 		QScrollBar *bar = scroll_->verticalScrollBar();
 		bar->setValue(to_end ? bar->maximum() : bar->minimum());
 		QTimer::singleShot(200, this, [this] { scroll_to_end_ = false; });
 	});
+}
+
+void Dock::update_minimum_width()
+{
+	// 折り返せない部品 (候補のボタンや承認のボタンの並び) の幅に、縦のスクロールバーと余白を足す
+	const QMargins margins = layout()->contentsMargins();
+	const int history_width = history_layout_->minimumSize().width() +
+				  scroll_->verticalScrollBar()->sizeHint().width() + 2 * scroll_->frameWidth();
+	const int needed = std::max({kDockMinimumWidth, history_width + margins.left() + margins.right(),
+				     layout()->minimumSize().width()});
+	if (minimumWidth() != needed)
+		setMinimumWidth(needed);
 }
 
 QWidget *Dock::build_empty_state()
@@ -276,7 +311,7 @@ QWidget *Dock::build_empty_state()
 	auto *box = new QWidget(history_);
 	auto *layout = new QVBoxLayout(box);
 	layout->addWidget(wrapped_label(text("Dock.Welcome"), box));
-	layout->addWidget(build_help());
+	layout->addWidget(build_help(box));
 	// 縦に長いドックで見切れないよう、チップは 1 列に並べる
 	for (const char *key : kChipKeys) {
 		auto *chip = new QPushButton(text(key), box);
@@ -325,7 +360,7 @@ QWidget *Dock::build_entry(const DisplayEntry &entry)
 		return frame;
 	}
 	case DisplayEntry::Kind::Notice:
-		return entry.text == kNoticeHelp ? build_help() : build_notice(entry);
+		return build_notice(entry);
 	}
 	return new QWidget(history_);
 }
@@ -374,13 +409,20 @@ QWidget *Dock::build_tool_result(const DisplayEntry &entry)
 	auto *box = new QWidget(history_);
 	auto *layout = new QVBoxLayout(box);
 	layout->setContentsMargins(0, 0, 0, 0);
+	// 見出しの文は折り返す。ボタンの文言にすると折り返せず、狭いドックで会話の欄を横に押し広げる
+	auto *header = new QHBoxLayout();
 	auto *toggle = new QToolButton(box);
+	toggle->setCheckable(true);
+	toggle->setArrowType(Qt::RightArrow);
 	// 道具の内部の名前ではなく、data/locale の Tool.<名前> の表示名を見せる
 	const std::string tool_key = "Tool." + entry.tool_name;
-	toggle->setText(text("Dock.SentData").arg(text(tool_key.c_str())));
-	toggle->setCheckable(true);
-	toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-	toggle->setArrowType(Qt::RightArrow);
+	auto *caption = wrapped_label(QStringLiteral("<a href=\"toggle\">%1</a>")
+					      .arg(text("Dock.SentData").arg(text(tool_key.c_str())).toHtmlEscaped()),
+				      box);
+	caption->setTextFormat(Qt::RichText);
+	connect(caption, &QLabel::linkActivated, toggle, [toggle] { toggle->toggle(); });
+	header->addWidget(toggle, 0, Qt::AlignTop);
+	header->addWidget(caption, 1);
 	auto *content = new QPlainTextEdit(box);
 	content->setReadOnly(true);
 	content->setPlainText(utf8(entry.text));
@@ -390,7 +432,7 @@ QWidget *Dock::build_tool_result(const DisplayEntry &entry)
 		content->setVisible(on);
 		toggle->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
 	});
-	layout->addWidget(toggle);
+	layout->addLayout(header);
 	layout->addWidget(content);
 	return box;
 }
@@ -481,10 +523,32 @@ QWidget *Dock::build_notice(const DisplayEntry &entry)
 	return label;
 }
 
-QWidget *Dock::build_help()
+void Dock::show_help_window()
+{
+	// 配信の操作を妨げないよう非モーダルで開く。閉じたら破棄する
+	auto *dialog = new QDialog(window());
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setWindowTitle(text("Dock.Help"));
+	auto *scroll = new QScrollArea(dialog);
+	scroll->setWidgetResizable(true);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scroll->setWidget(build_help(scroll));
+	// 標準のボタンの文言は Qt の翻訳に左右されるため、プラグインの文言を使う
+	auto *buttons = new QDialogButtonBox(dialog);
+	buttons->addButton(text("Dock.Close"), QDialogButtonBox::RejectRole);
+	connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+	auto *layout = new QVBoxLayout(dialog);
+	layout->addWidget(scroll, 1);
+	layout->addWidget(buttons);
+	dialog->resize(420, 560);
+	dialog->show();
+}
+
+QWidget *Dock::build_help(QWidget *parent)
 {
 	// できることと、できないことを分けて見せる
-	auto *frame = card(history_, "aiaHelp");
+	auto *frame = card(parent, "aiaHelp");
 	auto *layout = new QVBoxLayout(frame);
 	auto *label = wrapped_label(text("Help.Body"), frame);
 	label->setTextFormat(Qt::MarkdownText);

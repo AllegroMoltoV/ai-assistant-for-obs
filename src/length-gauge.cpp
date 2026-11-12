@@ -6,6 +6,8 @@
 
 #include <QPainter>
 
+#include <algorithm>
+
 namespace aia {
 
 namespace {
@@ -40,7 +42,8 @@ LengthGauge::LengthGauge(QWidget *parent) : QWidget(parent)
 void LengthGauge::set_percent(int percent)
 {
 	percent_ = percent;
-	setToolTip(QString::fromUtf8(obs_module_text("Dock.LengthGauge")).arg(percent));
+	// ゲージの横に文字を置く場所が無いため、意味と残りの割合はマウスを重ねたときに出す (依頼者の決定)
+	setToolTip(QString::fromUtf8(obs_module_text("Dock.LengthGauge")).arg(std::max(0, 100 - percent)));
 	update();
 }
 

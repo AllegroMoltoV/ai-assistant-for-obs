@@ -69,8 +69,6 @@ inline constexpr const char *kNoticeLengthNear = "Notice.LengthNear";
 inline constexpr const char *kNoticeLengthLimit = "Notice.LengthLimit";
 inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
-// できること・できないこと・質問の例。「?」のボタンで会話に出す。画面の側で中身を描く
-inline constexpr const char *kNoticeHelp = "Notice.Help";
 // 送る前の検査で問題ありとされ、その内容を送らなかった
 inline constexpr const char *kNoticeWithheld = "Notice.Withheld";
 // 送る前の検査ができなかったため、何も送らなかった
@@ -92,8 +90,6 @@ public:
 	// 画面とモデルに渡す内容と、実行の記録を消す (「新しい会話」のボタン)
 	void clear();
 	void cancel();
-	// ヘルプ文を画面の履歴に足す (「?」のボタン)。モデルには送らない
-	void show_help();
 
 	// 回答の言語の基準にする OBS の表示言語 (例: ja-JP)
 	void set_locale(const std::string &locale);
