@@ -306,6 +306,7 @@ QWidget *Dock::build_entry(const DisplayEntry &entry)
 		layout->addWidget(title);
 		auto *label = wrapped_label(utf8(entry.text), frame);
 		label->setTextFormat(Qt::MarkdownText);
+		label->setOpenExternalLinks(true);
 		layout->addWidget(label);
 		return frame;
 	}
