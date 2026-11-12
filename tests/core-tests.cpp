@@ -43,28 +43,41 @@ bool contains_word(const std::string &text, const char *word)
 	return text.find(word) != std::string::npos;
 }
 
-// 削除の道具と、配信・録画の開始と停止の道具が無いこと
+// 配信・録画の開始と停止の道具が無く、削除の道具は AI が追加したものを消す remove_item の 1 つだけであること
 void test_no_forbidden_tools()
 {
 	const auto &tools = function_tools();
-	CHECK(tools.size() == 6);
+	CHECK(tools.size() == 7);
+	int removals = 0;
 	for (const auto &tool : tools) {
 		const std::string name = tool.name;
-		CHECK(!contains_word(name, "delete"));
-		CHECK(!contains_word(name, "remove"));
+		if (contains_word(name, "delete") || contains_word(name, "remove")) {
+			++removals;
+			CHECK(name == kToolRemoveItem);
+			CHECK(tool.kind == ToolKind::Operation);
+		}
 		CHECK(!contains_word(name, "start"));
 		CHECK(!contains_word(name, "stop"));
 	}
+	CHECK(removals == 1);
 
 	int operations = 0;
 	for (const auto &tool : tools) {
 		if (tool.kind == ToolKind::Operation) {
 			++operations;
 			const std::string name = tool.name;
-			CHECK(name == kToolChangeSettings || name == kToolAddItem);
+			CHECK(name == kToolChangeSettings || name == kToolAddItem || name == kToolRemoveItem);
 		}
 	}
-	CHECK(operations == 2);
+	CHECK(operations == 3);
+
+	// 削除の対象はフィルタとソースだけで、シーンは選べない。説明でも追加したものに限ることを示す
+	for (const auto &tool : build_tools_json()) {
+		if (tool.value("name", "") != kToolRemoveItem)
+			continue;
+		CHECK(tool["parameters"]["properties"]["kind"]["enum"] == json::array({"filter", "source"}));
+		CHECK(contains_word(tool["description"].get<std::string>(), "added with add_item"));
+	}
 
 	// change_settings の対象にも削除や開始と停止が無いこと
 	for (const auto &target : change_targets()) {
@@ -76,12 +89,12 @@ void test_no_forbidden_tools()
 	}
 }
 
-// tools 配列が Web 検索と 6 つの関数で、strict のスキーマの条件を満たすこと
+// tools 配列が Web 検索と 7 つの関数で、strict のスキーマの条件を満たすこと
 void test_tools_json()
 {
 	const json tools = build_tools_json();
 	CHECK(tools.is_array());
-	CHECK(tools.size() == 7);
+	CHECK(tools.size() == 8);
 	CHECK(tools[0]["type"] == "web_search");
 
 	std::set<std::string> names;
@@ -95,7 +108,7 @@ void test_tools_json()
 		CHECK(params["required"].size() == params["properties"].size());
 		CHECK(find_function_tool(tool["name"].get<std::string>()) != nullptr);
 	}
-	CHECK(names.size() == 6);
+	CHECK(names.size() == 7);
 
 	// add_item の kind の候補が決めた 6 つと一致すること
 	for (const auto &tool : tools) {
@@ -132,6 +145,54 @@ void test_add_kinds()
 	CHECK(find_add_kind("image_source") == nullptr);
 	CHECK(find_add_kind("scene") == nullptr);
 	CHECK(find_add_kind("") == nullptr);
+}
+
+void test_parse_remove_item()
+{
+	auto filter = parse_remove_item(R"({"reason":"r","kind":"filter","source":"Mic","scene":null,"name":"Noise"})");
+	CHECK(filter.ok);
+	CHECK(filter.value.is_filter);
+	CHECK(filter.value.source == "Mic");
+	auto source = parse_remove_item(R"({"reason":"r","kind":"source","source":null,"scene":"Main","name":"Chat"})");
+	CHECK(source.ok);
+	CHECK(!source.value.is_filter);
+	CHECK(source.value.scene == "Main");
+
+	// シーンは削除できない
+	CHECK(!parse_remove_item(R"({"reason":"r","kind":"scene","source":null,"scene":"Main","name":"Main"})").ok);
+	// フィルタには付け先のソース、ソースにはシーンが要る
+	CHECK(!parse_remove_item(R"({"reason":"r","kind":"filter","source":null,"scene":"Main","name":"x"})").ok);
+	CHECK(!parse_remove_item(R"({"reason":"r","kind":"source","source":"Mic","scene":null,"name":"x"})").ok);
+	CHECK(!parse_remove_item(R"({"reason":"r","kind":"filter","source":"Mic","scene":null,"name":""})").ok);
+	CHECK(!parse_remove_item("not json").ok);
+}
+
+// 削除できるのは、追加したときに書いた目印があり、名前と付け先も一致するものだけ
+void test_added_mark()
+{
+	const json filter_mark = added_mark("Noise", "Mic");
+	CHECK(has_added_mark(filter_mark, "Noise", "Mic"));
+	// 利用者が作ったものには目印が無い
+	CHECK(!has_added_mark(json::object(), "Noise", "Mic"));
+	CHECK(!has_added_mark(json(), "Noise", "Mic"));
+	CHECK(!has_added_mark(json({{"other_plugin", true}}), "Noise", "Mic"));
+	// 複製すると目印も写るが、名前か付け先が変わるため削除の対象にならない
+	CHECK(!has_added_mark(filter_mark, "Noise 2", "Mic"));
+	CHECK(!has_added_mark(filter_mark, "Noise", "Desktop Audio"));
+	// 目印の値が偽や別の型なら AI が追加したものとして扱わない
+	json wrong = filter_mark;
+	wrong[kAddedMarkKey] = false;
+	CHECK(!has_added_mark(wrong, "Noise", "Mic"));
+	wrong[kAddedMarkKey] = "true";
+	CHECK(!has_added_mark(wrong, "Noise", "Mic"));
+
+	const json source_mark = added_mark("Chat", "");
+	CHECK(has_added_mark(source_mark, "Chat", ""));
+	CHECK(!has_added_mark(source_mark, "Chat 2", ""));
+	// 目印のほかの private settings の値があっても判定は変わらない
+	json mixed = source_mark;
+	mixed["some_plugin_value"] = 1;
+	CHECK(has_added_mark(mixed, "Chat", ""));
 }
 
 void test_parse_add_item()
@@ -262,6 +323,49 @@ void test_output_settings_policy()
 	CHECK(classify_output_setting(simple, "Unknown/Key", "", "") == guide);
 }
 
+// 反映の時期は docs/reports/2026-11-11-output-settings-apply.md の考察の「書き換えてよい項目」の表に従う
+void test_output_apply_timing()
+{
+	const auto simple = OutputMode::Simple;
+	const auto advanced = OutputMode::Advanced;
+	CHECK(output_apply_timing(simple, "Video/FPSCommon", "60", "30") == ApplyTiming::VideoReset);
+	CHECK(output_apply_timing(advanced, "Video/OutputCX", "1920", "1280") == ApplyTiming::VideoReset);
+	CHECK(output_apply_timing(simple, "SimpleOutput/VBitrate", "6000", "4500") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(simple, "SimpleOutput/ABitrate", "160", "128") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(simple, "SimpleOutput/NVENCPreset2", "p5", "p4") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(simple, "SimpleOutput/RecTracks", "1", "3") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(simple, "SimpleOutput/VodTrackEnabled", "false", "true") ==
+	      ApplyTiming::NextStreamStart);
+	CHECK(output_apply_timing(simple, "SimpleOutput/RecFormat2", "mkv", "mp4") == ApplyTiming::NextRecordingStart);
+	CHECK(output_apply_timing(simple, "SimpleOutput/RecFormat2", "mkv", "flv") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(advanced, "streamEncoder.json/bitrate", "6000", "4500") ==
+	      ApplyTiming::NextStreamStart);
+	CHECK(output_apply_timing(advanced, "recordEncoder.json/preset", "", "") == ApplyTiming::NextRecordingStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/Track1Bitrate", "160", "192") == ApplyTiming::NextStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/Track6Bitrate", "160", "192") == ApplyTiming::NextStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/RescaleRes", "1280x720", "1920x1080") ==
+	      ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(advanced, "AdvOut/RecTracks", "1", "3") == ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(advanced, "AdvOut/StreamMultiTrackAudioMixes", "0", "1") ==
+	      ApplyTiming::NextStreamStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/VodTrackEnabled", "false", "true") == ApplyTiming::NextStreamStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/RecFormat2", "mkv", "mp4") == ApplyTiming::NextRecordingStart);
+	CHECK(output_apply_timing(advanced, "AdvOut/RecFormat2", "mkv", "fragmented_mp4") ==
+	      ApplyTiming::NextStartAllStopped);
+	CHECK(output_apply_timing(advanced, "AdvOut/RecFormat2", "flv", "mkv") == ApplyTiming::NextStartAllStopped);
+
+	// 書き換えてよい項目は、すぐ反映されるもの以外に必ず承認の画面の一文がある
+	for (const auto &key : writable_output_config_keys()) {
+		const ApplyTiming timing =
+			output_apply_timing(key.rfind("AdvOut/", 0) == 0 ? advanced : simple, key, "mkv", "mp4");
+		CHECK(timing != ApplyTiming::Immediate);
+		CHECK(apply_timing_notice_key(timing) != nullptr);
+	}
+	CHECK(apply_timing_notice_key(ApplyTiming::Immediate) == nullptr);
+	CHECK(std::string(apply_timing_name(ApplyTiming::VideoReset)) == "immediately");
+	CHECK(std::string(apply_timing_name(ApplyTiming::NextStreamStart)) == "next_stream_start");
+}
+
 void test_build_request()
 {
 	ModelConfig config;
@@ -271,7 +375,7 @@ void test_build_request()
 	CHECK(request["store"] == false);
 	CHECK(request["reasoning"]["effort"] == "low");
 	CHECK(request["instructions"] == "inst");
-	CHECK(request["tools"].size() == 7);
+	CHECK(request["tools"].size() == 8);
 	CHECK(request["input"].size() == 1);
 	CHECK(request["input"][0]["role"] == "user");
 	bool has_encrypted = false;
@@ -501,40 +605,46 @@ void test_changes_audio_immediately()
 	CHECK(!changes_audio_immediately(AddKind::BrowserSource));
 }
 
-Proposal proposal_for(const char *target_id)
+Proposal proposal_for(const char *label)
 {
 	Proposal p;
 	p.tool = kToolChangeSettings;
-	p.items.push_back({"label", "0", "1", target_id});
+	p.items.push_back({label, "0", "1"});
 	return p;
 }
 
 void test_proposal_book()
 {
 	ProposalBook book;
-	const int a = book.add(proposal_for("audio_volume_db|Mic"));
-	const int b = book.add(proposal_for("audio_volume_db|Mic"));
-	const int c = book.add(proposal_for("audio_mute|Desktop"));
+	Proposal change = proposal_for("Micの音量");
+	change.items[0].before = "-10.0 dB";
+	change.items[0].after = "-6.0 dB";
+	change.items[0].record = {{"target", "audio_volume_db"},
+				  {"source", "Mic"},
+				  {"before_value_json", "-10.0"},
+				  {"after_value_json", "-6.0"}};
+	const int a = book.add(change);
 	CHECK(book.find(a)->state == ProposalState::Pending);
-
-	// 承認前は取り消せない
-	CHECK(!book.can_undo(a));
 	CHECK(book.mark_applied(a));
 	CHECK(!book.mark_applied(a));
 	CHECK(!book.mark_rejected(a));
-	CHECK(book.can_undo(a));
 
-	// 後から同じ対象を変えた提案が適用されている間は、先の提案を取り消せない
-	CHECK(book.mark_applied(b));
-	CHECK(!book.can_undo(a));
-	CHECK(!book.mark_undone(a));
-	CHECK(book.mark_undone(b));
-	CHECK(book.find(b)->state == ProposalState::Undone);
-	CHECK(book.can_undo(a));
-	CHECK(!book.mark_undone(b));
+	// 適用の結果は実行の記録として、表示用の値と、元に戻す提案に使える生の値の両方を持つ
+	const json applied = json::parse(book.tool_output(a));
+	CHECK(applied["status"] == "applied");
+	CHECK(applied["items"].size() == 1);
+	const json &item = applied["items"][0];
+	CHECK(item["operation"] == "change");
+	CHECK(item["label"] == "Micの音量");
+	CHECK(item["before"] == "-10.0 dB");
+	CHECK(item["after"] == "-6.0 dB");
+	CHECK(item["before_value_json"] == "-10.0");
+	CHECK(item["after_value_json"] == "-6.0");
+	CHECK(item["target"] == "audio_volume_db");
+	CHECK(item["applies"] == "immediately");
 
+	const int c = book.add(proposal_for("Desktop Audioのミュート"));
 	CHECK(book.mark_rejected(c));
-	CHECK(!book.can_undo(c));
 	CHECK(json::parse(book.tool_output(c))["status"] == "rejected_by_user");
 
 	const int d = book.add(proposal_for("x"));
@@ -543,6 +653,37 @@ void test_proposal_book()
 	CHECK(failed["status"] == "failed");
 	CHECK(failed["error"] == "source not found");
 	CHECK(json::parse(book.tool_output(999))["status"] == "unknown_proposal");
+
+	// 追加は remove_item の引数の形で記録し、削除は名前だけを返す
+	Proposal add;
+	add.tool = kToolAddItem;
+	add.items.push_back({"Micにフィルタ「Noise」(ノイズ抑制)を追加", "", "既定の設定", ProposalItemKind::Add});
+	add.items[0].record = {{"kind", "filter"}, {"source", "Mic"}, {"scene", nullptr}, {"name", "Noise"}};
+	const json added = json::parse(book.tool_output(book.add(add)));
+	CHECK(added["items"][0]["operation"] == "add");
+	CHECK(added["items"][0]["kind"] == "filter");
+	CHECK(added["items"][0]["name"] == "Noise");
+	CHECK(!added["items"][0].contains("applies"));
+	Proposal remove;
+	remove.tool = kToolRemoveItem;
+	remove.items.push_back({"Micのフィルタ「Noise」(ノイズ抑制)", "", "", ProposalItemKind::Remove});
+	CHECK(json::parse(book.tool_output(book.add(remove)))["items"][0]["operation"] == "remove");
+
+	// 出力の設定は反映の時期を結果に含め、承認の画面には時期ごとに一文を出す
+	Proposal output = proposal_for("出力の設定「配信 > 映像ビットレート」");
+	output.items[0].timing = ApplyTiming::NextStartAllStopped;
+	output.items.push_back(
+		{"映像の設定「FPS 共通値」", "60", "30", ProposalItemKind::Change, ApplyTiming::VideoReset});
+	output.items.push_back({"出力の設定「配信 > 音声ビットレート」", "160", "128", ProposalItemKind::Change,
+				ApplyTiming::NextStartAllStopped});
+	const json timed = json::parse(book.tool_output(book.add(output)));
+	CHECK(timed["items"][0]["applies"] == "next_stream_or_recording_start_after_all_outputs_stopped");
+	CHECK(timed["items"][1]["applies"] == "immediately");
+	const auto timings = notable_timings(output);
+	CHECK(timings.size() == 2);
+	CHECK(timings[0] == ApplyTiming::NextStartAllStopped);
+	CHECK(timings[1] == ApplyTiming::VideoReset);
+	CHECK(notable_timings(change).empty());
 }
 
 ParsedResponse response_with_call(const char *call_id)
@@ -725,7 +866,7 @@ class FakeHost : public ToolHost {
 public:
 	std::vector<std::string> read_calls;
 	int applies = 0;
-	int undos = 0;
+	std::vector<RemoveRequest> removals;
 	bool prepare_ok = true;
 	bool apply_ok = true;
 
@@ -742,14 +883,27 @@ public:
 			return result;
 		}
 		for (const auto &change : request.changes)
-			result.value.items.push_back({change.source, "0", change.value.dump(), "t|" + change.source});
+			result.value.items.push_back({change.source, "0", change.value.dump()});
 		result.ok = true;
 		return result;
 	}
 	Parsed<Proposal> prepare_add(const AddRequest &request) override
 	{
 		Parsed<Proposal> result;
-		result.value.items.push_back({request.name, "", request.kind->name, "add|" + request.name, true});
+		result.value.items.push_back({request.name, "", request.kind->name, ProposalItemKind::Add});
+		result.ok = true;
+		return result;
+	}
+	Parsed<Proposal> prepare_remove(const RemoveRequest &request) override
+	{
+		removals.push_back(request);
+		Parsed<Proposal> result;
+		// プラグインの側では目印の無いものを拒む。ここでは "User" で始まる名前を利用者が作ったものとする
+		if (request.name.rfind("User", 0) == 0) {
+			result.error = "This item was not added by the assistant, so it cannot be deleted.";
+			return result;
+		}
+		result.value.items.push_back({request.name, "", "", ProposalItemKind::Remove});
 		result.ok = true;
 		return result;
 	}
@@ -759,11 +913,6 @@ public:
 		if (!apply_ok)
 			error = "source not found";
 		return apply_ok;
-	}
-	bool undo(const Proposal &, std::string &) override
-	{
-		++undos;
-		return true;
 	}
 };
 
@@ -816,17 +965,75 @@ void test_session_approval()
 	CHECK(transport.requests.size() == 2);
 	const json output = last_input_item(transport.requests[1]);
 	CHECK(output["call_id"] == "c1");
-	CHECK(json::parse(output["output"].get<std::string>())["status"] == "applied");
+	const json result = json::parse(output["output"].get<std::string>());
+	CHECK(result["status"] == "applied");
+	// 適用の結果に、項目と変える前と後の値が入る
+	CHECK(result["items"].size() == 1);
+	CHECK(result["items"][0]["label"] == "Mic");
+	CHECK(result["items"][0]["before"] == "0");
+	CHECK(result["items"][0]["after"] == "-6");
 	CHECK(session.state() == SessionState::Idle);
+}
 
-	// 取り消すと OBS を戻し、次の要求でモデルに伝える
-	session.undo(1);
-	CHECK(host.undos == 1);
-	CHECK(session.proposals().find(1)->state == ProposalState::Undone);
-	transport.replies.push_back({200, FakeTransport::text_body("了解です"), ""});
-	session.send_user_message("戻しました");
-	const json &items = transport.requests.back()["input"];
-	CHECK(contains_word(items.dump(), "The user undid proposal 1"));
+// 削除の道具も、承認を経て適用する。利用者が作ったものは提案にならず、誤りをモデルに返す
+void test_session_remove()
+{
+	{
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200,
+			 FakeTransport::call_body(
+				 "c1", kToolRemoveItem,
+				 R"({"reason":"r","kind":"filter","source":"Mic","scene":null,"name":"Noise"})"),
+			 ""});
+		transport.replies.push_back({200, FakeTransport::text_body("削除しました"), ""});
+		session.send_user_message("さっきのフィルタを消して");
+		CHECK(session.state() == SessionState::AwaitingApproval);
+		CHECK(host.removals.size() == 1);
+		CHECK(host.removals[0].is_filter);
+		CHECK(host.applies == 0);
+		CHECK(session.proposals().find(1)->tool == kToolRemoveItem);
+		session.approve(1);
+		CHECK(host.applies == 1);
+		CHECK(json::parse(last_input_item(transport.requests[1])["output"].get<std::string>())["status"] ==
+		      "applied");
+	}
+	{
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200,
+			 FakeTransport::call_body(
+				 "c1", kToolRemoveItem,
+				 R"({"reason":"r","kind":"source","source":null,"scene":"Main","name":"User camera"})"),
+			 ""});
+		transport.replies.push_back({200, FakeTransport::text_body("削除できません"), ""});
+		session.send_user_message("カメラを消して");
+		CHECK(session.proposals().all().empty());
+		CHECK(host.applies == 0);
+		CHECK(contains_word(last_input_item(transport.requests[1])["output"].get<std::string>(),
+				    "not added by the assistant"));
+		CHECK(session.state() == SessionState::Idle);
+	}
+	{
+		// シーンの削除は引数の検査で拒み、OBS とつなぐ層を呼ばない
+		FakeTransport transport;
+		FakeHost host;
+		Session session(transport, host);
+		transport.replies.push_back(
+			{200,
+			 FakeTransport::call_body(
+				 "c1", kToolRemoveItem,
+				 R"({"reason":"r","kind":"scene","source":null,"scene":"Main","name":"Main"})"),
+			 ""});
+		transport.replies.push_back({200, FakeTransport::text_body("できません"), ""});
+		session.send_user_message("シーンを消して");
+		CHECK(host.removals.empty());
+		CHECK(session.proposals().all().empty());
+	}
 }
 
 void test_session_reject_and_failures()
@@ -892,9 +1099,6 @@ void test_session_reject_and_failures()
 		for (const auto &entry : session.conversation().display())
 			noticed = noticed || entry.text == kNoticeApplyFailed;
 		CHECK(noticed);
-		// 失敗した提案は取り消せない
-		session.undo(1);
-		CHECK(host.undos == 0);
 	}
 }
 
@@ -1219,6 +1423,27 @@ std::set<std::string> locale_keys(const char *file)
 	return keys;
 }
 
+// 日英の ini が同じキーを持ち、どちらにも重複が無いこと
+void test_locale_files()
+{
+	std::map<std::string, std::vector<std::string>> lists;
+	for (const char *file : {"ja-JP.ini", "en-US.ini"}) {
+		std::ifstream in(std::string(AIA_SOURCE_DIR) + "/data/locale/" + file);
+		CHECK(in.good());
+		std::string line;
+		while (std::getline(in, line)) {
+			const size_t eq = line.find('=');
+			if (eq != std::string::npos)
+				lists[file].push_back(line.substr(0, eq));
+		}
+		const std::set<std::string> unique(lists[file].begin(), lists[file].end());
+		if (unique.size() != lists[file].size())
+			std::printf("duplicate keys in %s\n", file);
+		CHECK(unique.size() == lists[file].size());
+	}
+	CHECK(locale_keys("ja-JP.ini") == locale_keys("en-US.ini"));
+}
+
 void test_display_names()
 {
 	FakeUiText fake;
@@ -1286,6 +1511,14 @@ void test_display_names()
 	// 基本の出力モードの映像エンコーダの選択肢も、OBS の訳を引けない版のために写しを持つ
 	for (const auto &choice : simple_encoder_choices())
 		fake.obs_keys.insert(choice.locale_key);
+	// 承認の画面の反映の時期と削除の文言
+	for (const ApplyTiming timing :
+	     {ApplyTiming::VideoReset, ApplyTiming::NextStartAllStopped, ApplyTiming::NextStart,
+	      ApplyTiming::NextStreamStart, ApplyTiming::NextRecordingStart})
+		fake.plugin_keys.insert(apply_timing_notice_key(timing));
+	for (const char *key : {"Proposal.Title", "Proposal.RemoveLine", "Proposal.RemoveFilter",
+				"Proposal.RemoveSource", "Proposal.RemoveIrreversible", "Tool.remove_item"})
+		fake.plugin_keys.insert(key);
 	for (const char *file : {"ja-JP.ini", "en-US.ini"}) {
 		const std::set<std::string> keys = locale_keys(file);
 		for (const auto &key : fake.plugin_keys) {
@@ -1308,9 +1541,12 @@ int main()
 	test_no_forbidden_tools();
 	test_tools_json();
 	test_add_kinds();
+	test_parse_remove_item();
+	test_added_mark();
 	test_parse_add_item();
 	test_parse_change_settings();
 	test_output_settings_policy();
+	test_output_apply_timing();
 	test_build_request();
 	test_parse_response();
 	test_tool_output_limits();
@@ -1323,6 +1559,7 @@ int main()
 	test_session_read_tool_loop();
 	test_session_approval();
 	test_session_reject_and_failures();
+	test_session_remove();
 	test_session_limits_and_errors();
 	test_session_length_and_cancel();
 	test_session_moderation();
@@ -1332,6 +1569,7 @@ int main()
 	test_expected_video();
 	test_log_file_selection();
 	test_display_names();
+	test_locale_files();
 
 	std::printf("%d checks, %d failures\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;

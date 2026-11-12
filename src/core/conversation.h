@@ -59,8 +59,6 @@ public:
 	// 道具の結果を items に足す。sent_text は AI に送ったとおりの内容
 	void add_tool_result(const std::string &call_id, const std::string &tool_name, const std::string &sent_text);
 	void add_proposal_entry(int proposal_id);
-	// 利用者が取り消しなどを行ったことを、次の要求でモデルに伝え、画面には知らせを出す
-	void add_user_event(const std::string &model_text, const std::string &notice_key, const std::string &detail);
 	void add_notice(const std::string &notice_key, const std::string &detail = std::string());
 
 	// 次の要求の input。前の会話から要点を引き継いだときは、要点を先頭に置く

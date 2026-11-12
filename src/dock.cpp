@@ -69,8 +69,6 @@ QString proposal_state_text(ProposalState state)
 		return text("Proposal.Rejected");
 	case ProposalState::Failed:
 		return text("Proposal.Failed");
-	case ProposalState::Undone:
-		return text("Proposal.Undone");
 	}
 	return QString();
 }
@@ -391,27 +389,49 @@ QWidget *Dock::build_proposal(int proposal_id)
 	if (!proposal)
 		return frame;
 
-	auto *title = new QLabel(text("Proposal.Title").arg(proposal->id), frame);
+	// 提案は AI アシスタントの発言の一部として、話し手の見出しと同じ形で見せる
+	auto *title = new QLabel(text("Proposal.Title"), frame);
 	title->setStyleSheet("font-weight: bold;");
 	layout->addWidget(title);
 	if (!proposal->reason.empty())
 		layout->addWidget(wrapped_label(utf8(proposal->reason), frame));
+	const bool pending = proposal->state == ProposalState::Pending;
 	// モデルの指示文に頼らず、配信中・録画中の音声の変更では必ず注意を出す
-	if (proposal->live_audio && proposal->state == ProposalState::Pending) {
+	if (proposal->live_audio && pending) {
 		auto *warning = wrapped_label(text("Proposal.LiveAudio"), frame);
 		warning->setStyleSheet("color: #d9534f;");
 		layout->addWidget(warning);
 	}
 
-	// 変える前と後の値の差分を見せる。追加なら追加する内容を見せる
+	// 変える前と後の値の差分を見せる。追加なら追加する内容を、削除なら削除するものの名前と種類を見せる
+	bool removes = false;
 	for (const auto &item : proposal->items) {
-		const QString line =
-			item.addition
-				? text("Proposal.AddLine").arg(utf8(item.label), utf8(item.after))
-				: text("Proposal.ChangeLine").arg(utf8(item.label), utf8(item.before), utf8(item.after));
+		QString line;
+		switch (item.kind) {
+		case ProposalItemKind::Change:
+			line = text("Proposal.ChangeLine").arg(utf8(item.label), utf8(item.before), utf8(item.after));
+			break;
+		case ProposalItemKind::Add:
+			line = text("Proposal.AddLine").arg(utf8(item.label), utf8(item.after));
+			break;
+		case ProposalItemKind::Remove:
+			line = text("Proposal.RemoveLine").arg(utf8(item.label));
+			removes = true;
+			break;
+		}
 		auto *label = wrapped_label(line, frame);
 		label->setTextFormat(Qt::PlainText);
 		layout->addWidget(label);
+	}
+	if (removes && pending) {
+		auto *warning = wrapped_label(text("Proposal.RemoveIrreversible"), frame);
+		warning->setStyleSheet("color: #d9534f;");
+		layout->addWidget(warning);
+	}
+	// 出力の設定は適用してもすぐには反映されないものが多いため、反映の時期を示す
+	if (pending) {
+		for (const ApplyTiming timing : notable_timings(*proposal))
+			layout->addWidget(wrapped_label(text(apply_timing_notice_key(timing)), frame));
 	}
 
 	QString state = proposal_state_text(proposal->state);
@@ -422,18 +442,13 @@ QWidget *Dock::build_proposal(int proposal_id)
 	auto *buttons = new QHBoxLayout();
 	buttons->addStretch(1);
 	const SessionState session_state = session_->state();
-	if (proposal->state == ProposalState::Pending && session_state == SessionState::AwaitingApproval) {
+	if (pending && session_state == SessionState::AwaitingApproval) {
 		auto *reject = new QPushButton(text("Proposal.Reject"), frame);
 		auto *approve = new QPushButton(text("Proposal.Approve"), frame);
 		connect(reject, &QPushButton::clicked, this, [this, proposal_id] { session_->reject(proposal_id); });
 		connect(approve, &QPushButton::clicked, this, [this, proposal_id] { session_->approve(proposal_id); });
 		buttons->addWidget(reject);
 		buttons->addWidget(approve);
-	}
-	if (session_->proposals().can_undo(proposal_id) && session_state == SessionState::Idle) {
-		auto *undo = new QPushButton(text("Proposal.Undo"), frame);
-		connect(undo, &QPushButton::clicked, this, [this, proposal_id] { session_->undo(proposal_id); });
-		buttons->addWidget(undo);
 	}
 	layout->addLayout(buttons);
 	return frame;

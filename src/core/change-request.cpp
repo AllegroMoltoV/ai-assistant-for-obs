@@ -181,4 +181,39 @@ Parsed<AddRequest> parse_add_item(const std::string &arguments)
 	return result;
 }
 
+Parsed<RemoveRequest> parse_remove_item(const std::string &arguments)
+{
+	Parsed<RemoveRequest> result;
+	const json args = json::parse(arguments, nullptr, false);
+	if (args.is_discarded() || !args.is_object()) {
+		result.error = "arguments must be a JSON object";
+		return result;
+	}
+	RemoveRequest &request = result.value;
+	request.reason = string_or_empty(args, "reason");
+	const std::string kind = string_or_empty(args, "kind");
+	if (kind != "filter" && kind != "source") {
+		result.error = "kind must be \"filter\" or \"source\"";
+		return result;
+	}
+	request.is_filter = kind == "filter";
+	request.source = string_or_empty(args, "source");
+	request.scene = string_or_empty(args, "scene");
+	request.name = string_or_empty(args, "name");
+	if (request.name.empty()) {
+		result.error = "name must not be empty";
+		return result;
+	}
+	if (request.is_filter && request.source.empty()) {
+		result.error = "source is required to remove a filter";
+		return result;
+	}
+	if (!request.is_filter && request.scene.empty()) {
+		result.error = "scene is required to remove a source";
+		return result;
+	}
+	result.ok = true;
+	return result;
+}
+
 } // namespace aia

@@ -55,13 +55,6 @@ void Conversation::add_proposal_entry(int proposal_id)
 	display_.push_back(std::move(entry));
 }
 
-void Conversation::add_user_event(const std::string &model_text, const std::string &notice_key,
-				  const std::string &detail)
-{
-	items_.push_back(user_message_item(model_text));
-	add_notice(notice_key, detail);
-}
-
 void Conversation::add_notice(const std::string &notice_key, const std::string &detail)
 {
 	DisplayEntry entry{DisplayEntry::Kind::Notice, notice_key};

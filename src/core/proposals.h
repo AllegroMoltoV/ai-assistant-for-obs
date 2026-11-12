@@ -38,19 +38,23 @@ ChangeDecision decide_change(const Change &change, const OutputActivity &activit
 bool changes_audio_immediately(ChangeTarget target);
 bool changes_audio_immediately(AddKind kind);
 
-enum class ProposalState { Pending, Applied, Rejected, Failed, Undone };
+enum class ProposalState { Pending, Applied, Rejected, Failed };
+
+enum class ProposalItemKind { Change, Add, Remove };
 
 // 利用者に見せる 1 件の変更
 struct ProposalItem {
 	// 何を変えるかの説明。例: "Micの音量"
 	std::string label;
-	// 承認の画面に出す、OBS の画面上の名前で表した値。適用と取り消しには Proposal::apply_data を使う
+	// 承認の画面に出す、OBS の画面上の名前で表した値。適用には Proposal::apply_data を使う。
+	// 追加では after に追加する内容の設定を入れ、追加と削除では before を使わない
 	std::string before;
 	std::string after;
-	// 同じ対象を変える提案の重なりを判定するための識別子。例: "audio_volume_db|Mic"
-	std::string target_id;
-	// 追加の提案のとき真。before は使わず、after に追加する内容の設定を入れる
-	bool addition = false;
+	ProposalItemKind kind = ProposalItemKind::Change;
+	ApplyTiming timing = ApplyTiming::Immediate;
+	// 適用の結果としてモデルに返す、道具の引数の形の値。変更では変える前と後の値を value_json の形で持ち、
+	// 利用者に元に戻してと頼まれたとき、モデルが元の値に戻す提案を組み立てられるようにする
+	nlohmann::json record = nlohmann::json::object();
 };
 
 struct Proposal {
@@ -59,7 +63,7 @@ struct Proposal {
 	std::string tool;
 	std::string reason;
 	std::vector<ProposalItem> items;
-	// 適用と取り消しに使うデータ。中身は OBS とつなぐ層が決める
+	// 適用に使うデータ。中身は OBS とつなぐ層が決める
 	nlohmann::json apply_data;
 	// 配信中か録画中に音声を変える提案のとき真。承認の画面で、視聴者にすぐ聞こえることを必ず示す
 	bool live_audio = false;
@@ -67,7 +71,11 @@ struct Proposal {
 	std::string error;
 };
 
-// 操作の提案の台帳。承認は毎回の確認だけで、常に許可する設定は持たない
+// 承認の画面に一文を出す反映の時期。Immediate を除き、items に現れた順に重複なく返す
+std::vector<ApplyTiming> notable_timings(const Proposal &proposal);
+
+// 操作の提案の台帳。承認は毎回の確認だけで、常に許可する設定は持たない。
+// 「新しい会話」か OBS の終了までの記録で、ファイルには保存しない
 class ProposalBook {
 public:
 	// 提案を足して id を返す。状態は Pending
@@ -81,11 +89,8 @@ public:
 	bool mark_rejected(int id);
 	bool mark_failed(int id, const std::string &error);
 
-	// 取り消せるのは Applied の提案で、後から同じ対象を変えて Applied のままの提案が無いとき
-	bool can_undo(int id) const;
-	bool mark_undone(int id);
-
-	// 操作の道具の結果としてモデルに返す JSON の文字列
+	// 操作の道具の結果としてモデルに返す JSON の文字列。実行の記録として、提案ごとの項目、
+	// 変える前と後の値 (表示用の名前と生の値)、反映の時期、状態を含める
 	std::string tool_output(int id) const;
 
 	void clear() { proposals_.clear(); }

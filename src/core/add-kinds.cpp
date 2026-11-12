@@ -25,4 +25,23 @@ const AddKindInfo *find_add_kind(const std::string &name)
 	return nullptr;
 }
 
+nlohmann::json added_mark(const std::string &name, const std::string &parent)
+{
+	return {{kAddedMarkKey, true}, {kAddedMarkNameKey, name}, {kAddedMarkParentKey, parent}};
+}
+
+bool has_added_mark(const nlohmann::json &private_settings, const std::string &name, const std::string &parent)
+{
+	if (!private_settings.is_object())
+		return false;
+	const auto flag = private_settings.find(kAddedMarkKey);
+	const auto marked_name = private_settings.find(kAddedMarkNameKey);
+	const auto marked_parent = private_settings.find(kAddedMarkParentKey);
+	if (flag == private_settings.end() || !flag->is_boolean() || !flag->get<bool>())
+		return false;
+	if (marked_name == private_settings.end() || !marked_name->is_string() || *marked_name != name)
+		return false;
+	return marked_parent != private_settings.end() && marked_parent->is_string() && *marked_parent == parent;
+}
+
 } // namespace aia

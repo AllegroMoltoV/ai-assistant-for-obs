@@ -47,6 +47,12 @@ constexpr std::array<const char *, 15> kAdvancedAllowed = {
 	"AdvOut/RecFormat2",
 };
 
+// 詳細出力の音声ビットレート。稼働状態で守られずに読まれるため、全停止を条件にしない
+constexpr std::array<const char *, 6> kAdvancedTrackBitrates = {
+	"AdvOut/Track1Bitrate", "AdvOut/Track2Bitrate", "AdvOut/Track3Bitrate",
+	"AdvOut/Track4Bitrate", "AdvOut/Track5Bitrate", "AdvOut/Track6Bitrate",
+};
+
 constexpr std::array<const char *, 9> kVideoKeys = {
 	"Video/BaseCX",    "Video/BaseCY", "Video/OutputCX", "Video/OutputCY", "Video/FPSType",
 	"Video/FPSCommon", "Video/FPSInt", "Video/FPSNum",   "Video/FPSDen",
@@ -103,6 +109,68 @@ OutputSettingClass classify_output_setting(OutputMode mode, const std::string &k
 	if (starts_with(key, kStreamEncoderJson) || starts_with(key, kRecordEncoderJson))
 		return key.find('/') + 1 < key.size() ? OutputSettingClass::Allowed : OutputSettingClass::GuideOnly;
 	return contains(kAdvancedAllowed, key) ? OutputSettingClass::Allowed : OutputSettingClass::GuideOnly;
+}
+
+ApplyTiming output_apply_timing(OutputMode mode, const std::string &key, const std::string &old_value,
+				const std::string &new_value)
+{
+	if (is_video_setting_key(key))
+		return ApplyTiming::VideoReset;
+	if (starts_with(key, kStreamEncoderJson))
+		return ApplyTiming::NextStreamStart;
+	if (starts_with(key, kRecordEncoderJson))
+		return ApplyTiming::NextRecordingStart;
+	if (key == "SimpleOutput/VodTrackEnabled" || key == "AdvOut/VodTrackEnabled" ||
+	    key == "AdvOut/StreamMultiTrackAudioMixes")
+		return ApplyTiming::NextStreamStart;
+	if (contains(kAdvancedTrackBitrates, key))
+		return ApplyTiming::NextStart;
+	if (is_record_format_key(key)) {
+		// flv の判定と、詳細出力の fragmented の判定は、すべて止まった状態からの開始時に読まれる
+		const auto needs_all_stopped = [mode](const std::string &format) {
+			return format == "flv" || (mode == OutputMode::Advanced && starts_with(format, "fragmented_"));
+		};
+		return needs_all_stopped(old_value) || needs_all_stopped(new_value) ? ApplyTiming::NextStartAllStopped
+										    : ApplyTiming::NextRecordingStart;
+	}
+	return ApplyTiming::NextStartAllStopped;
+}
+
+const char *apply_timing_name(ApplyTiming timing)
+{
+	switch (timing) {
+	case ApplyTiming::Immediate:
+	case ApplyTiming::VideoReset:
+		return "immediately";
+	case ApplyTiming::NextStartAllStopped:
+		return "next_stream_or_recording_start_after_all_outputs_stopped";
+	case ApplyTiming::NextStart:
+		return "next_stream_or_recording_start";
+	case ApplyTiming::NextStreamStart:
+		return "next_stream_start";
+	case ApplyTiming::NextRecordingStart:
+		return "next_recording_start";
+	}
+	return "unknown";
+}
+
+const char *apply_timing_notice_key(ApplyTiming timing)
+{
+	switch (timing) {
+	case ApplyTiming::Immediate:
+		return nullptr;
+	case ApplyTiming::VideoReset:
+		return "Proposal.Timing.VideoReset";
+	case ApplyTiming::NextStartAllStopped:
+		return "Proposal.Timing.NextStartAllStopped";
+	case ApplyTiming::NextStart:
+		return "Proposal.Timing.NextStart";
+	case ApplyTiming::NextStreamStart:
+		return "Proposal.Timing.NextStreamStart";
+	case ApplyTiming::NextRecordingStart:
+		return "Proposal.Timing.NextRecordingStart";
+	}
+	return nullptr;
 }
 
 } // namespace aia

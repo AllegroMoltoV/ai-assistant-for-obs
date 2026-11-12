@@ -36,8 +36,8 @@ public:
 	virtual std::string run_read_tool(const std::string &name, const std::string &arguments) = 0;
 	virtual Parsed<Proposal> prepare_change(const ChangeRequest &request) = 0;
 	virtual Parsed<Proposal> prepare_add(const AddRequest &request) = 0;
+	virtual Parsed<Proposal> prepare_remove(const RemoveRequest &request) = 0;
 	virtual bool apply(const Proposal &proposal, std::string &error) = 0;
-	virtual bool undo(const Proposal &proposal, std::string &error) = 0;
 };
 
 enum class SessionState {
@@ -62,8 +62,6 @@ inline constexpr const char *kNoticeCarryOverFailed = "Error.CarryOverFailed";
 inline constexpr const char *kNoticeLengthLong = "Notice.LengthLong";
 inline constexpr const char *kNoticeLengthNear = "Notice.LengthNear";
 inline constexpr const char *kNoticeLengthLimit = "Notice.LengthLimit";
-inline constexpr const char *kNoticeUndone = "Notice.Undone";
-inline constexpr const char *kNoticeUndoFailed = "Error.UndoFailed";
 inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
 // できること・できないこと・質問の例。「?」のボタンで会話に出す。画面の側で中身を描く
@@ -84,10 +82,9 @@ public:
 	void send_user_message(const std::string &text);
 	void approve(int proposal_id);
 	void reject(int proposal_id);
-	void undo(int proposal_id);
 	// 要点を引き継いで新しい会話を始める。会話の長さが約 50 % に達してから使える
 	void carry_over();
-	// 画面とモデルに渡す内容の両方を消す (/clear)
+	// 画面とモデルに渡す内容と、実行の記録を消す (「新しい会話」のボタン)
 	void clear();
 	void cancel();
 	// ヘルプ文を画面の履歴に足す (「?」のボタン)。モデルには送らない
@@ -122,7 +119,7 @@ private:
 	ProposalBook proposals_;
 	SessionState state_ = SessionState::Idle;
 	int steps_ = 0;
-	// 世代の番号。消去や取り消しの後に届いた古い応答を捨てる
+	// 世代の番号。消去や中止の後に届いた古い応答を捨てる
 	int generation_ = 0;
 	std::function<void()> on_changed_;
 };

@@ -171,13 +171,21 @@ void Session::run_function_call(const FunctionCall &call)
 		}
 		prepared = host_.prepare_change(request.value);
 		prepared.value.reason = request.value.reason;
-	} else {
+	} else if (call.name == kToolAddItem) {
 		const auto request = parse_add_item(call.arguments);
 		if (!request.ok) {
 			conversation_.add_tool_result(call.call_id, call.name, error_json(request.error));
 			return;
 		}
 		prepared = host_.prepare_add(request.value);
+		prepared.value.reason = request.value.reason;
+	} else {
+		const auto request = parse_remove_item(call.arguments);
+		if (!request.ok) {
+			conversation_.add_tool_result(call.call_id, call.name, error_json(request.error));
+			return;
+		}
+		prepared = host_.prepare_remove(request.value);
 		prepared.value.reason = request.value.reason;
 	}
 	if (!prepared.ok) {
@@ -239,23 +247,6 @@ void Session::reject(int proposal_id)
 		return;
 	proposals_.mark_rejected(proposal_id);
 	resolve_proposal(proposal_id);
-}
-
-void Session::undo(int proposal_id)
-{
-	if (state_ != SessionState::Idle || !proposals_.can_undo(proposal_id))
-		return;
-	const Proposal *proposal = proposals_.find(proposal_id);
-	std::string error;
-	if (!host_.undo(*proposal, error)) {
-		conversation_.add_notice(kNoticeUndoFailed, error);
-		changed();
-		return;
-	}
-	proposals_.mark_undone(proposal_id);
-	conversation_.add_user_event("[The user undid proposal " + std::to_string(proposal_id) + "]", kNoticeUndone,
-				     std::to_string(proposal_id));
-	changed();
 }
 
 void Session::carry_over()
