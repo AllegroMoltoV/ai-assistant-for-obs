@@ -1272,6 +1272,75 @@ int command_language(int argc, char **argv)
 	return mismatches == 0 ? 0 : 1;
 }
 
+// 応答に時間のかかる要求を、プラグインと同じ通信のコードで送り、かかった時間と失敗の理由を出す。
+// 実機で 25 秒前後に "Timeout was reached" で切れた現象を切り分けるため
+int command_slow(int argc, char **argv)
+{
+	const fs::path env_path = argc >= 3 ? fs::path(argv[2]) : fs::path(".env");
+	const std::string key = read_api_key(env_path);
+	if (key.empty()) {
+		std::fprintf(stderr, "OPENAI_API_KEY was not found in the env file\n");
+		return 2;
+	}
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+	const OpenAiClient client(key, nullptr);
+	ModelConfig config;
+	config.max_output_tokens = 6000;
+	const json input = json::array(
+		{{{"role", "user"},
+		  {"content", "Write the numbers from 1 to 700 in English words, one per line, with no other text."}}});
+	const json request = build_request(config, "Follow the user's instruction exactly.", json::array(), input);
+	if (argc >= 4 && std::strcmp(argv[3], "--trace") == 0) {
+		// プラグインと同じ設定で送り、libcurl の状態の文だけを出す。送受信の中身 (認証のヘッダーを含む) は出さない
+		CURL *curl = curl_easy_init();
+		const std::string body = request.dump();
+		std::string response;
+		curl_slist *headers = curl_slist_append(nullptr, "Content-Type: application/json");
+		headers = curl_slist_append(headers, ("Authorization: Bearer " + key).c_str());
+		curl_easy_setopt(curl, CURLOPT_URL, "https://api.openai.com/v1/responses");
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+				 +[](char *data, size_t size, size_t count, void *user) {
+					 static_cast<std::string *>(user)->append(data, size * count);
+					 return size * count;
+				 });
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+		const std::string variant = argc >= 5 ? argv[4] : "";
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, variant == "connect180" ? 180L : 10L);
+		if (variant == "tls12")
+			curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_TLSv1_2);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 180L);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION,
+				 +[](CURL *, curl_infotype type, char *data, size_t size, void *) {
+					 if (type == CURLINFO_TEXT)
+						 std::fwrite(data, 1, size, stderr);
+					 return 0;
+				 });
+		const auto started = std::chrono::steady_clock::now();
+		const CURLcode rc = curl_easy_perform(curl);
+		const double ms =
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+		long status = 0;
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+		std::printf("trace: rc=%d (%s) http=%ld elapsed_ms=%.0f bytes=%zu\n", static_cast<int>(rc),
+			    curl_easy_strerror(rc), status, ms, response.size());
+		curl_slist_free_all(headers);
+		curl_easy_cleanup(curl);
+		curl_global_cleanup();
+		return rc == CURLE_OK ? 0 : 1;
+	}
+	const HttpResult result = client.post_responses(request);
+	const ParsedResponse parsed = parse_response(result.http_status, result.body);
+	std::printf("http=%ld elapsed_ms=%.0f transport_error=\"%s\" status=%s output_tokens=%lld text_bytes=%zu\n",
+		    result.http_status, result.elapsed_ms, result.transport_error.c_str(), parsed.status.c_str(),
+		    parsed.usage.output_tokens, parsed.text.size());
+	curl_global_cleanup();
+	return result.transport_error.empty() ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1280,6 +1349,8 @@ int main(int argc, char **argv)
 		return command_run(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "report") == 0)
 		return command_report(argc, argv);
+	if (argc >= 2 && std::strcmp(argv[1], "slow") == 0)
+		return command_slow(argc, argv);
 	if (argc >= 2 && std::strcmp(argv[1], "language") == 0)
 		return command_language(argc, argv);
 	std::fprintf(stderr, "usage: aia-model-eval run|report|language ...\n");

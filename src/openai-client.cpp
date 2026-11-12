@@ -10,9 +10,12 @@ namespace {
 
 constexpr const char *kResponsesUrl = "https://api.openai.com/v1/responses";
 constexpr const char *kModerationsUrl = "https://api.openai.com/v1/moderations";
-constexpr long kConnectTimeoutSeconds = 10;
 // Web 検索と推論を含む応答は数十秒かかることがあるため、流用元の 30 秒から延ばす
 constexpr long kTimeoutSeconds = 180;
+// 接続のタイムアウトも全体と同じにする。OpenAI のサーバーは応答の途中で TLS の再交渉を求め、OBS 同梱の libcurl 8.12.1
+// (Schannel) は再交渉に接続のタイムアウトを当てる。10 秒にすると、要求の開始から 10 秒を過ぎた応答が
+// "Timeout was reached" で必ず失敗した (docs/logs/2026-11-12-tls-renegotiation-timeout.md)
+constexpr long kConnectTimeoutSeconds = kTimeoutSeconds;
 
 size_t append_body(char *data, size_t size, size_t count, void *user)
 {
