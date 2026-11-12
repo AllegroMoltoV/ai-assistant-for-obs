@@ -1,10 +1,10 @@
 {
   "title": "ゲームの音が入らない (デスクトップ音声のデバイスの固定)",
-  "first_message": "ゲームの音が配信に入ってないみたいです。自分には聞こえてます",
+  "first_message": "なんか配信にゲームの音入ってないって言われた。こっちは普通に聞こえてるのに",
   "user_replies": [
-    "ヘッドセットで聞いてます。最近 USB のヘッドセットに変えました",
-    "はい、HyperX のヘッドセットです",
-    "直りました、ありがとうございます"
+    "どこで聞いてるかってこと? ヘッドセットかな。そういえば最近変えた気がする",
+    "たぶん HyperX ってやつ。USB で挿すやつ",
+    "あ、入ったっぽい。ありがと"
   ],
   "output_mode": "Simple",
   "outputs_active": false,
@@ -46,14 +46,13 @@
         "active": true,
         "settings": {"device_id": "{0.0.0.00000000}.{6b1c4e2a-93d5-4c1f-8f0e-2a7b9c3d5e11}", "use_device_timing": false},
         "filters": [],
-        "properties": {
-          "device_id": {"type": "list", "items": [
-            {"name": "既定", "value": "default"},
-            {"name": "スピーカー (Realtek(R) Audio)", "value": "{0.0.0.00000000}.{6b1c4e2a-93d5-4c1f-8f0e-2a7b9c3d5e11}"},
-            {"name": "ヘッドホン (HyperX Cloud Alpha Wireless)", "value": "{0.0.0.00000000}.{a3f09d71-5be2-4e6c-9d14-7c2e8b0f6a42}"},
-            {"name": "LG ULTRAGEAR (NVIDIA High Definition Audio)", "value": "{0.0.0.00000000}.{1d7e5a90-2c43-4f8b-a6e1-93b0c4d2f785}"}
-          ]},
-          "use_device_timing": {"type": "bool"}
+        "property_options": {
+          "device_id": {"description": "デバイス", "options": [
+            {"label": "既定", "value": "default"},
+            {"label": "スピーカー (Realtek(R) Audio)", "value": "{0.0.0.00000000}.{6b1c4e2a-93d5-4c1f-8f0e-2a7b9c3d5e11}"},
+            {"label": "ヘッドホン (HyperX Cloud Alpha Wireless)", "value": "{0.0.0.00000000}.{a3f09d71-5be2-4e6c-9d14-7c2e8b0f6a42}"},
+            {"label": "LG ULTRAGEAR (NVIDIA High Definition Audio)", "value": "{0.0.0.00000000}.{1d7e5a90-2c43-4f8b-a6e1-93b0c4d2f785}"}
+          ]}
         }
       },
       "マイク": {
@@ -62,7 +61,7 @@
         "active": true,
         "settings": {"device_id": "default", "use_device_timing": false},
         "filters": [{"name": "ノイズ抑制", "type": "noise_suppress_filter_v2", "enabled": true, "settings": {"method": "rnnoise"}}],
-        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "マイク (HyperX Cloud Alpha Wireless)", "value": "{0.0.1.00000000}.{c81e2f04-7a3d-4b95-8e60-1f2d3c4b5a69}"}]}}
+        "property_options": {"device_id": {"description": "デバイス", "options": [{"label": "既定", "value": "default"}, {"label": "マイク (HyperX Cloud Alpha Wireless)", "value": "{0.0.1.00000000}.{c81e2f04-7a3d-4b95-8e60-1f2d3c4b5a69}"}]}}
       },
       "ゲームキャプチャ": {
         "name": "ゲームキャプチャ",
@@ -71,7 +70,11 @@
         "width": 1920,
         "height": 1080,
         "settings": {"capture_mode": "any_fullscreen", "capture_audio": false, "capture_cursor": true, "anti_cheat_hook": true},
-        "filters": []
+        "filters": [],
+        "property_options": {
+          "capture_mode": {"description": "モード", "options": [{"label": "フルスクリーンアプリケーションをキャプチャ", "value": "any_fullscreen"}, {"label": "特定のウィンドウをキャプチャ", "value": "window"}, {"label": "ホットキーで前面のウィンドウをキャプチャ", "value": "hotkey"}]},
+          "hook_rate": {"description": "フック速度", "options": [{"label": "低速", "value": 0}, {"label": "通常 (推奨)", "value": 1}, {"label": "高速", "value": 2}, {"label": "最速", "value": 3}]}
+        }
       }
     },
     "read_log": [

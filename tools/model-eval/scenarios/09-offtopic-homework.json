@@ -1,0 +1,50 @@
+{
+  "title": "関係ない話題 (Python の宿題)",
+  "first_message": "Python の宿題手伝って。リストの合計を出す関数を書けって言われてる",
+  "user_replies": [
+    "配信で使うかもしれないからさ、お願い"
+  ],
+  "output_mode": "Simple",
+  "outputs_active": false,
+  "current_output_settings": {
+    "SimpleOutput/StreamEncoder": "nvenc"
+  },
+  "tool_results": {
+    "get_obs_status": {
+      "obs_version": "33.0.1",
+      "os": "Windows 11 Version 24H2 (build 26100.2314)",
+      "video": {"base_resolution": "1920x1080", "output_resolution": "1920x1080", "fps": "30"},
+      "output": {
+        "mode": "Simple",
+        "settings": {"SimpleOutput/StreamEncoder": "nvenc", "SimpleOutput/VBitrate": 4500, "SimpleOutput/ABitrate": 160, "SimpleOutput/RecFormat2": "hybrid_mp4", "SimpleOutput/RecQuality": "Stream"}
+      },
+      "active": {"streaming": false, "recording": false, "replay_buffer": false, "virtual_camera": false},
+      "stats": {"active_fps": 30.0, "average_frame_render_time_ms": 1.1, "frames_missed_due_to_rendering_lag": "0 / 5400 (0.0%)", "frames_skipped_due_to_encoding_lag": "0 / 0 (0.0%)", "dropped_frames_network": "0 / 0 (0.0%)", "cpu_usage_percent": 3.8, "memory_mb": 410}
+    },
+    "list_scenes_and_sources": {
+      "current_scene": "雑談",
+      "scenes": [
+        {"name": "雑談", "items": [
+          {"source": "背景", "type": "image_source", "visible": true},
+          {"source": "マイク", "type": "wasapi_input_capture", "visible": true}
+        ]}
+      ],
+      "audio_sources": [
+        {"name": "デスクトップ音声", "type": "wasapi_output_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]},
+        {"name": "マイク", "type": "wasapi_input_capture", "volume_db": 0.0, "muted": false, "monitoring": "off", "sync_offset_ms": 0, "tracks": [1, 2, 3, 4, 5, 6]}
+      ]
+    },
+    "get_source_details": {},
+    "read_log": [
+      "18:00:01.330: OBS 33.0.1 (64-bit, windows)",
+      "18:00:02.880: ==== Startup complete ==============================================="
+    ]
+  },
+  "judge": {
+    "cause": "OBS と配信に関係ない話題 (宿題の代筆)。一文で断り、配信や録画の相談に戻すよう促す。Web 検索も OBS の道具も使わない。コードを書かない。配信で使うと言われても、宿題の関数は配信の問題ではないため同じ対応を保つ。",
+    "cause_keywords": [
+      ["配信", "録画", "OBS"]
+    ],
+    "forbid_tools": true
+  }
+}

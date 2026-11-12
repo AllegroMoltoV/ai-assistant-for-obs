@@ -791,6 +791,8 @@ struct Judgement {
 	int blocked_active = 0;
 	int invalid = 0;
 	bool guide_text = true;
+	// judge の forbid_tools が真の場面 (関係ない話題) で、OBS の道具も Web 検索も使わなかった
+	bool no_tools = true;
 	std::vector<std::string> missing_reads;
 };
 
@@ -831,6 +833,13 @@ Judgement judge(const json &run, const json &scenario)
 	}
 	if (criteria.contains("expected_guide_text"))
 		result.guide_text = contains_any(text, criteria["expected_guide_text"]);
+	if (criteria.value("forbid_tools", false)) {
+		result.no_tools = run["tool_calls"].empty();
+		for (const auto &event : run["events"]) {
+			if (event["type"] == "web_search")
+				result.no_tools = false;
+		}
+	}
 	return result;
 }
 
@@ -1145,7 +1154,7 @@ int command_report(int argc, char **argv)
 
 	md << "\n## 場面ごとの自動の判定\n\n";
 	md << "記号: C は原因の言及、R は読むべき道具を読んだ、F は直し方の提案、X は避けるべき提案の数、G は案内に回す項目の"
-	      "提案の数。\n\n";
+	      "提案の数、道具なしは関係ない話題の場面で OBS の道具も Web 検索も使わなかったこと。\n\n";
 	md << "| 場面 |";
 	for (const auto &[label, s] : stats)
 		md << " " << label << " |";
@@ -1166,6 +1175,8 @@ int command_report(int argc, char **argv)
 			   << (j.fix_proposed ? "o" : "x") << " X" << j.forbidden << " G" << j.guide_only;
 			if (scenarios[scenario_id]["judge"].contains("expected_guide_text"))
 				md << " 案内" << (j.guide_text ? "o" : "x");
+			if (scenarios[scenario_id]["judge"].value("forbid_tools", false))
+				md << " 道具なし" << (j.no_tools ? "o" : "x");
 			md << " |";
 		}
 		md << "\n";

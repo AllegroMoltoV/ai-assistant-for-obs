@@ -1,9 +1,9 @@
 {
   "title": "配信にマイクの声が入らない (配信のトラックにマイクが割り当てられていない)",
-  "first_message": "配信してたらコメントで声が聞こえないって言われました。OBS のメーターは動いてるんですけど",
+  "first_message": "声聞こえないってコメントきた。でも OBS のメーターはちゃんと動いてるんだけど",
   "user_replies": [
-    "録画は声も入ってたと思います。いま配信中です",
-    "わかりました、やってみます"
+    "録画? よくわかんない…たぶん録画のほうは声入ってたと思う。いま配信してる最中",
+    "わかった、やってみる"
   ],
   "output_mode": "Advanced",
   "outputs_active": true,
@@ -58,14 +58,15 @@
           {"name": "ノイズ抑制", "type": "noise_suppress_filter_v2", "enabled": true, "settings": {"method": "rnnoise"}},
           {"name": "コンプレッサー", "type": "compressor_filter", "enabled": true, "settings": {"ratio": 4.0, "threshold": -18.0}}
         ],
-        "properties": {"device_id": {"type": "list", "items": [{"name": "既定", "value": "default"}, {"name": "マイク (Shure MV7)", "value": "{0.0.1.00000000}.{5d2e9b1a-0c7f-4e83-b4a6-8f1d2e3c4b70}"}]}}
+        "property_options": {"device_id": {"description": "デバイス", "options": [{"label": "既定", "value": "default"}, {"label": "マイク (Shure MV7)", "value": "{0.0.1.00000000}.{5d2e9b1a-0c7f-4e83-b4a6-8f1d2e3c4b70}"}]}}
       },
       "デスクトップ音声": {
         "name": "デスクトップ音声",
         "type": "wasapi_output_capture",
         "active": true,
         "settings": {"device_id": "default", "use_device_timing": false},
-        "filters": []
+        "filters": [],
+        "property_options": {"device_id": {"description": "デバイス", "options": [{"label": "既定", "value": "default"}, {"label": "スピーカー (Realtek(R) Audio)", "value": "{0.0.0.00000000}.{8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f}"}]}}
       }
     },
     "read_log": [

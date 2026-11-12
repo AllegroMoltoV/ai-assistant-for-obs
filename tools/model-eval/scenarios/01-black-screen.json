@@ -1,9 +1,10 @@
 {
   "title": "画面キャプチャが真っ黒 (ノート PC の GPU の不一致)",
-  "first_message": "画面が真っ黒で何も映らないです",
+  "first_message": "よくわかんないけど映らない。黒いまま",
   "user_replies": [
-    "まだ真っ黒です。ノートパソコンで、デスクトップ全体を映したいです",
-    "Windows の設定でやる方法も教えてください"
+    "どこ見ればいいの? ノートパソコンで、デスクトップを全部映したいだけなんだけど",
+    "まだ黒い。たぶん何も変わってない",
+    "パソコン側でなんかやるやつ? やり方教えて"
   ],
   "output_mode": "Simple",
   "outputs_active": false,
@@ -68,11 +69,9 @@
         "height": 0,
         "settings": {"method": 0, "monitor_id": "\\\\?\\DISPLAY#AUO1E8B#4&2a8b1f3c&0&UID8388688#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}", "capture_cursor": true, "force_sdr": false},
         "filters": [],
-        "properties": {
-          "method": {"type": "list", "items": [{"name": "自動", "value": 0}, {"name": "DXGI デスクトップ複製", "value": 1}, {"name": "Windows 10 (1903 以降)", "value": 2}]},
-          "monitor_id": {"type": "list", "items": [{"name": "Generic PnP Monitor: 1920x1080 @ 0,0 (プライマリモニター)", "value": "\\\\?\\DISPLAY#AUO1E8B#4&2a8b1f3c&0&UID8388688#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}"}]},
-          "capture_cursor": {"type": "bool"},
-          "force_sdr": {"type": "bool"}
+        "property_options": {
+          "method": {"description": "キャプチャ方法", "options": [{"label": "自動", "value": 0}, {"label": "新方式 (WGC)", "value": 2}, {"label": "旧方式 (DXGI)", "value": 1}]},
+          "monitor_id": {"description": "ディスプレイ", "options": [{"label": "Generic PnP Monitor: 1920x1080 @ 0,0 (プライマリモニター)", "value":"\\\\?\\DISPLAY#AUO1E8B#4&2a8b1f3c&0&UID8388688#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}"}]}
         }
       },
       "Webカメラ": {
@@ -83,7 +82,10 @@
         "height": 720,
         "settings": {"video_device_id": "Integrated Camera:\\\\?\\usb#vid_04f2&pid_b6d9&mi_00#6&1f2a3b4c&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global", "res_type": 0, "active": true},
         "filters": [],
-        "properties": {}
+        "property_options": {
+          "video_device_id": {"description": "デバイス", "options": [{"label": "Integrated Camera", "value": "Integrated Camera:\\\\?\\usb#vid_04f2&pid_b6d9&mi_00#6&1f2a3b4c&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"}]},
+          "res_type": {"description": "解像度/FPS タイプ", "options": [{"label": "デバイスの既定値", "value": 0}, {"label": "カスタム", "value": 1}]}
+        }
       }
     },
     "read_log": [
@@ -180,10 +182,10 @@
     ]
   },
   "judge": {
-    "cause": "ノート PC で、OBS が NVIDIA の GPU で描画している一方、画面は内蔵 GPU (Intel) につながっている。DXGI の複製 (DuplicateOutput1) が 0x887A0004 で失敗している。直し方は、キャプチャ方法を Windows 10 (1903 以降) に変えるか、Windows のグラフィックスの設定で OBS を省電力 (内蔵 GPU) にする。",
+    "cause": "ノート PC で、OBS が NVIDIA の GPU で描画している一方、画面は内蔵 GPU (Intel) につながっている。DXGI の複製 (DuplicateOutput1) が 0x887A0004 で失敗している。直し方は、キャプチャ方法を新方式 (WGC) に変えるか、Windows のグラフィックスの設定で OBS を省電力 (内蔵 GPU) にする。",
     "cause_keywords": [
       ["GPU", "グラフィックス", "グラフィック"],
-      ["内蔵", "Intel", "省電力", "Windows 10 (1903", "Windows Graphics Capture", "キャプチャ方法", "キャプチャー方法", "WGC"]
+      ["内蔵", "Intel", "省電力", "新方式","Windows Graphics Capture", "キャプチャ方法", "キャプチャー方法", "WGC"]
     ],
     "must_read": [["read_log", "get_source_details:画面キャプチャ"]],
     "good_proposals": [
