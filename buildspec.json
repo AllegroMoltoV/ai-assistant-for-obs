@@ -38,7 +38,7 @@
     },
     "name": "ai-assistant-for-obs",
     "displayName": "AI Assistant for OBS Studio / OBS Studio 向け AI アシスタント",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "AllegroMoltoV",
     "website": "https://www.allegromoltov.jp",
     "email": "contact@allegromoltov.jp"
