@@ -1,18 +1,105 @@
 # AI Assistant for OBS Studio / OBS Studio 向け AI アシスタント
 
-[配信プラグイン倉庫くん](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs) にも掲載しています。 / Also listed on [Plugin Soko-kun](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs?lang=en).
+[English](#english) | [日本語](#日本語)
+
+![The AI assistant is asked to add a background, and the source is added after the proposal is approved / AI アシスタントに背景の追加を頼み、提案を承認して追加される様子](.soko-kun/image.gif)
+
+## English
+
+Also listed on [Plugin Soko-kun](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs?lang=en).
+
+An OBS Studio dock plugin where you can talk to an AI assistant about streaming problems. The assistant reads the OBS state and log, searches the web, and explains the cause. Problems that can be fixed inside OBS are fixed on the spot after you approve the change.
+
+> This plugin is free. However, OpenAI API usage is billed separately to your own OpenAI account, and you need an OpenAI API key that you issue yourself. OpenAI API usage is made with your own account and at your own responsibility. See [Responsibility and no warranty](#responsibility-and-no-warranty).
+
+### Background
+
+When streamers run into problems in OBS Studio such as "nothing shows up", "no sound", or "the video stutters", they often cannot put the cause into words. This plugin is a partner that helps you reach the cause through a conversation, even if you cannot describe the problem well. The conversation screen and flow follow the screens and flows published by AI chat products for developers.
+
+### Features
+
+- Start a consultation just by picking one of seven common problems shown in an empty conversation: nothing shows up, no game or PC audio, no microphone audio, doubled audio or echo, stuttering video, dropped streams or frames, and microphone noise
+- The assistant reads the OBS state and statistics, scenes and sources, source details, and the last 300 lines of the OBS log, and asks follow-up questions to narrow down the cause
+- When it searches the web for known issues, the answer includes links to the sources
+- Answers are displayed as they arrive
+- The assistant proposes changes to OBS settings and adds the filters and sources listed below. Each proposal shows the values before and after the change, and is applied only when you approve it
+- To revert a change, ask the assistant. It proposes a change back to the original values
+- A help window lists what the assistant can and cannot do
+- A gauge next to the input box shows the conversation length. From about 50%, a button to summarize the conversation and start a new one appears
+- You can open and check what was sent to OpenAI in the conversation
+- The dock is available in English and Japanese. The assistant answers in the OBS display language, or in the language you write in
+
+| | |
+| --- | --- |
+| What it can do | Investigate and explain the cause, search the web, change settings inside OBS, add noise suppression, gain, compressor, and crop/pad filters and application audio capture, browser, and color sources, delete the filters and sources it added, guide you through fixes outside OBS |
+| What it cannot do | Delete scenes or sources and filters you created, start or stop streaming, recording, the replay buffer, or the virtual camera, operate anything outside OBS, save conversations, answer topics unrelated to OBS and streaming |
+
+The filters and sources added by the assistant are marked in their private settings, and can be deleted with your approval. When you ask it to delete something you created, it suggests hiding, disabling, or muting instead. Output and video settings are not changed while streaming, recording, the replay buffer, or the virtual camera is active.
+
+### Requirements
+
+- A Windows x64 PC and OBS Studio 33 or later
+- An OpenAI API key. Issue one on [the OpenAI API keys page](https://platform.openai.com/api-keys). You also need to set up billing for API usage
+
+### Cost
+
+OpenAI API usage is billed to your OpenAI account. The author of the plugin receives no fees. The plugin uses `gpt-6.1-terra` (reasoning effort low) for conversations and web searches. Check the latest prices on [the OpenAI pricing page](https://developers.openai.com/api/docs/pricing). In the author's tests of the seven common problems, one consultation cost about 0.012 USD on average and about 0.055 USD at most. Most of the cost comes from web searches.
+
+### Data sent and data not stored
+
+- The plugin communicates only with `api.openai.com`, and only after you press Send
+- To answer, your messages and the OBS state, settings, and log that the assistant reads are sent to OpenAI. The settings include scene and source names, text source contents, image and video file paths, and browser source URLs
+- Images and video are not sent
+- Before sending, your messages and the content read from OBS are checked with the OpenAI moderation API. Content that may violate the OpenAI usage policies is not sent
+- Secrets such as stream keys, keys in stream URLs, query string values, passwords, and tokens are masked before sending
+- Requests are sent with `store: false`
+- Conversations are not saved to files. Conversation text and the API key are not written to the OBS log or the plugin log
+- The API key is encrypted with Windows DPAPI and stored in `%APPDATA%\obs-studio\plugin_config\ai-assistant-for-obs\`
+
+### Responsibility and no warranty
+
+- This plugin calls the OpenAI API with an API key you issued yourself. OpenAI API usage is made with your own account, and complying with the OpenAI terms and usage policies is your responsibility
+- If scene or source names, text source contents, or file names contain content that violates the OpenAI usage policies, that content is sent to OpenAI
+- This plugin is provided under GPL-2.0 without warranty. The author is not liable for any damage caused by using it. Answers and proposals may contain mistakes. Check the values before and after a change before you approve it
+
+### Platforms
+
+| OS | Distribution | Verified |
+| --- | --- | --- |
+| Windows x64 | Prebuilt ZIP | Tested on OBS Studio 33.0.1 |
+| macOS, Linux | Not distributed | Only the GitHub Actions builds are checked. The plugin cannot be used on macOS and Linux because saving the API key is supported only on Windows |
+
+### Installation
+
+1. Download the latest Windows x64 ZIP from [Releases](https://github.com/AllegroMoltoV/ai-assistant-for-obs/releases).
+2. Quit OBS Studio and extract the ZIP.
+3. Type `%PROGRAMDATA%` in the File Explorer address bar, then open `obs-studio` and `plugins`. Create the folders if they do not exist.
+4. Copy the `ai-assistant-for-obs` folder from the ZIP into that `plugins` folder. If Windows asks for administrator permission, allow it.
+
+### Usage
+
+1. Start OBS Studio and show "AI Assistant" from the Docks menu.
+2. Open "Settings" in the dock, enter your OpenAI API key, and press "Save". When "Status: saved" appears, you are ready.
+3. Describe your problem in the input box and press "Send", or press one of the problems shown in an empty conversation. Enter sends, and Shift+Enter inserts a new line.
+4. The assistant reads the OBS state and explains the cause and how to fix it.
+5. Setting changes and filter and source additions and deletions are shown as proposals. Check the values before and after, then press "Approve and apply" or "Reject".
+6. Press "New conversation" to start another consultation. The "?" button opens the help window.
+
+Building from source is described in the Japanese section below.
+
+## 日本語
+
+[配信プラグイン倉庫くん](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/ai-assistant-for-obs) にも掲載しています。
 
 配信のトラブルを、OBS Studio のドックのチャットで相談できるプラグインです。AI アシスタントが OBS の状態とログを読み、Web を調べて原因を説明します。OBS の中で直せるものは、利用者の承認を得てその場で直します。
 
-![AI アシスタントに背景の追加を頼み、提案を承認して追加される様子](.soko-kun/image.gif)
-
 > このプラグインは無料です。ただし、OpenAI API の利用料金は、利用者ご自身の OpenAI アカウントに別途請求されます。利用には、ご自身で発行した OpenAI の API キーが必要です。OpenAI API の利用は、利用者ご自身のアカウントと責任で行います。詳しくは「[利用者の責任と無保証](#利用者の責任と無保証)」を参照してください。
 
-## 背景
+### 背景
 
 配信者は、OBS Studio で「映らない」「音が入らない」「カクつく」といったトラブルに出会っても、原因を自分で言葉にできないことが多くあります。このプラグインは、うまく言葉にできなくても、会話を通じて原因にたどり着けるようにするための相談相手です。会話の画面と操作の流れは、開発者向けの AI のチャットの製品で公開されている画面と操作の流れを手本にしています。
 
-## 主な機能
+### 主な機能
 
 - 空の会話に置いた候補から選ぶだけで相談を始められます。候補は次の 7 つです。
   - 画面が映らない
@@ -33,7 +120,7 @@
 - 日本語と英語の表示に対応しています。AI アシスタントは OBS の表示言語で答え、利用者が別の言語で書いたときはその言語で答えます
 - このプラグイン自体の使い方や料金、送るデータについての質問にも答えます
 
-### できることとできないこと
+#### できることとできないこと
 
 | 区分 | 内容 |
 | --- | --- |
@@ -42,12 +129,12 @@
 
 AI アシスタントが追加したフィルタとソースには目印を付け、承認を得て削除できます。目印は、追加したソースとフィルタの private settings に書き、シーンコレクションとともに保存されます。利用者が作ったものの削除を頼まれたときは、代わりに非表示・無効・ミュートを提案します。削除は取り消せません。出力と映像の設定は、配信・録画・リプレイバッファ・仮想カメラのいずれかが動作している間は変えません。映像エンコーダのように、プラグインから反映できない出力の設定は、OBS の設定画面での手順を案内します。
 
-## 必要なもの
+### 必要なもの
 
 - Windows x64 の PC と OBS Studio 33 以降
 - OpenAI の API キー。[OpenAI の API キーのページ](https://platform.openai.com/api-keys) で発行してください。API の利用料金の支払いの設定も必要です
 
-## 費用
+### 費用
 
 OpenAI API の利用料金は、利用者の OpenAI アカウントに請求されます。プラグインの作者は料金を受け取りません。
 
@@ -60,7 +147,7 @@ OpenAI API の利用料金は、利用者の OpenAI アカウントに請求さ�
 
 作者の試験では、7 つの症状の相談の 1 回あたりの料金は、平均で約 0.012 米ドル、最大で約 0.055 米ドルでした。最大の相談は Web 検索を 3 回使ったものです。料金の大半は Web 検索の料金です。試験の詳細は `docs/reports/2026-11-12-model-comparison.md` にあります。
 
-## 送信するデータと保存しないもの
+### 送信するデータと保存しないもの
 
 - プラグインが通信する相手は `api.openai.com` だけです。利用者が送信を押すまで通信しません
 - 相談に答えるため、利用者の発言と、AI アシスタントが読んだ OBS の状態・設定・ログを OpenAI に送ります。設定には、シーンとソースの名前、テキストソースの本文、画像や動画のファイルのパス、ブラウザソースの URL が含まれます
@@ -71,20 +158,20 @@ OpenAI API の利用料金は、利用者の OpenAI アカウントに請求さ�
 - 会話の履歴をファイルに保存しません。OBS のログとプラグインのログにも、会話の本文と API キーを書きません
 - API キーは、Windows の DPAPI で暗号化して `%APPDATA%\obs-studio\plugin_config\ai-assistant-for-obs\` に保存します
 
-## 利用者の責任と無保証
+### 利用者の責任と無保証
 
 - このプラグインは、利用者が自分で発行した OpenAI の API キーで、OpenAI API を呼び出します。OpenAI API の利用は利用者ご自身のアカウントで行われ、OpenAI の利用規約と利用ポリシーの順守は利用者の責任です
 - OBS のシーンやソースの名前、テキストソースの本文、ファイルの名前に、OpenAI の利用ポリシーに反する内容が含まれていると、その内容が OpenAI に送られます
 - このプラグインは GPL-2.0 のもとで無保証で提供されます。プラグインの利用によって生じた損害について、作者は責任を負いません。AI アシスタントの回答と提案には誤りが含まれることがあります。提案を承認する前に、変更の前と後の値を確かめてください
 
-## 対応環境と配布
+### 対応環境と配布
 
 | OS | 配布の方法 | 確認の範囲 |
 | --- | --- | --- |
 | Windows x64 | ビルド済みの ZIP | OBS Studio 33.0.1 で動作を確認 |
 | macOS、Linux | 配布しない | GitHub Actions でビルドが通ることだけを確かめます。API キーの保存が Windows だけに対応しているため、macOS と Linux の OBS ではこのプラグインを使えません |
 
-## インストール
+### インストール
 
 1. [Releases](https://github.com/AllegroMoltoV/ai-assistant-for-obs/releases) から、最新の Windows x64 の ZIP をダウンロードしてください。
 2. OBS Studio を終了し、ZIP を展開してください。
@@ -102,7 +189,7 @@ C:\ProgramData\obs-studio\plugins\
 
 `ProgramData` は隠しフォルダーです。アドレス欄にパスを入力すると、隠しフォルダーの表示の設定を変えずに開けます。`ai-assistant-for-obs` フォルダーを二重に作らないでください。
 
-## 使い方
+### 使い方
 
 1. OBS Studio を起動し、メニューの「ドック」から「AIアシスタント」を表示してください。
 2. ドックの「設定」を開き、OpenAI の API キーを入力して「保存」を押してください。「状態: 保存済み」と表示されれば準備は完了です。
@@ -113,7 +200,7 @@ C:\ProgramData\obs-studio\plugins\
 
 入力欄の横のゲージは、会話の長さです。マウスを重ねると、残りの割合が出ます。約 50% を超えると「会話を要約し新規会話を開始」のボタンが出ます。
 
-## 内容物
+### 内容物
 
 | パス | 内容 |
 | --- | --- |
@@ -124,7 +211,7 @@ C:\ProgramData\obs-studio\plugins\
 | `data/locale/` | 画面の文言 |
 | `docs/` | 調査レポートと記録。索引は `docs/INDEX.md` |
 
-## ソースからのビルド
+### ソースからのビルド
 
 依存ライブラリは [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate) の仕組みで自動的に取得します。Windows では Visual Studio 2026 と CMake 3.28 以降が必要です。
 
@@ -136,7 +223,7 @@ ctest --test-dir build_x64 -C RelWithDebInfo --output-on-failure
 
 ビルドの直後に OBS のプラグインのフォルダーへ配置する `ENABLE_POST_BUILD_INSTALL` は、既定で OFF です。導入先の `%PROGRAMDATA%\obs-studio\plugins\` はほかのプラグインと共有のため、実機で確かめるときだけ ON にします。
 
-### 依存ライブラリ
+#### 依存ライブラリ
 
 - [nlohmann/json](https://github.com/nlohmann/json) v3.12.0 (MIT License)。ライセンス文は `data/licenses/` にあります
 - libcurl。OBS Studio に同梱されたものを使います
