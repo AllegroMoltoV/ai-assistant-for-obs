@@ -94,6 +94,21 @@ json add_item_schema()
 	});
 }
 
+json remove_item_schema()
+{
+	return object_schema({
+		{"reason",
+		 {{"type", "string"}, {"description", "Why this item should be deleted, in the user's language."}}},
+		{"kind",
+		 {{"type", "string"},
+		  {"enum", json::array({"filter", "source"})},
+		  {"description", "Whether to delete a filter or a source."}}},
+		{"source", nullable_string("For filters: the source the filter is attached to. Otherwise null.")},
+		{"scene", nullable_string("For sources: the scene to remove the source from. Otherwise null.")},
+		{"name", {{"type", "string"}, {"description", "Name of the filter or source to delete."}}},
+	});
+}
+
 } // namespace
 
 const std::vector<FunctionToolInfo> &function_tools()
@@ -102,6 +117,7 @@ const std::vector<FunctionToolInfo> &function_tools()
 		{kToolGetObsStatus, ToolKind::Read},        {kToolListScenesAndSources, ToolKind::Read},
 		{kToolGetSourceDetails, ToolKind::Read},    {kToolReadLog, ToolKind::Read},
 		{kToolChangeSettings, ToolKind::Operation}, {kToolAddItem, ToolKind::Operation},
+		{kToolRemoveItem, ToolKind::Operation},
 	};
 	return tools;
 }
@@ -150,6 +166,12 @@ json build_tools_json()
 		"Propose adding a noise suppression, gain, compressor or crop filter, an application audio capture "
 		"source, or a browser source. The user must approve before anything is added. Nothing else can be added.",
 		add_item_schema()));
+	tools.push_back(function_tool(
+		kToolRemoveItem,
+		"Propose deleting a filter or source that this assistant added with add_item. Only items added by this "
+		"assistant can be deleted; the plugin refuses anything the user created. The user must approve, and the "
+		"deletion cannot be undone.",
+		remove_item_schema()));
 	return tools;
 }
 

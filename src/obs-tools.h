@@ -7,7 +7,7 @@
 
 namespace aia {
 
-// OBS とつなぐ層。道具の実行と、提案の適用と取り消しを行う。
+// OBS とつなぐ層。道具の実行と、提案の適用を行う。
 // すべて Qt のメインスレッドから呼ぶ。返す文字列は秘密の値を伏せ、量の上限で切ったもので、そのまま AI に送る
 
 // CPU 使用率は前回の問い合わせからの平均のため、プラグインの読み込み時に計測を始め、解放時に止める
@@ -32,12 +32,10 @@ bool settings_dialog_open();
 // error にモデルへ返す説明を入れる
 Parsed<Proposal> prepare_change_proposal(const ChangeRequest &request);
 Parsed<Proposal> prepare_add_proposal(const AddRequest &request);
+// 削除の提案を組み立てる。AI が追加した目印の無いものは ok を偽にして拒む
+Parsed<Proposal> prepare_remove_proposal(const RemoveRequest &request);
 
 // 承認された提案を適用する。失敗したら error に理由を入れて偽を返す。途中まで適用した分は元に戻す
 bool apply_proposal(const Proposal &proposal, std::string &error);
-
-// 適用した提案を取り消す。変更は before の値に戻し、追加は追加したものを取り除く。
-// 追加の取り消しは利用者が押したときだけ行う例外で、エージェントの道具からは呼ばない
-bool undo_proposal(const Proposal &proposal, std::string &error);
 
 } // namespace aia

@@ -33,14 +33,14 @@ Parsed<Proposal> ObsToolHost::prepare_add(const AddRequest &request)
 	return prepare_add_proposal(request);
 }
 
+Parsed<Proposal> ObsToolHost::prepare_remove(const RemoveRequest &request)
+{
+	return prepare_remove_proposal(request);
+}
+
 bool ObsToolHost::apply(const Proposal &proposal, std::string &error)
 {
 	return apply_proposal(proposal, error);
-}
-
-bool ObsToolHost::undo(const Proposal &proposal, std::string &error)
-{
-	return undo_proposal(proposal, error);
 }
 
 } // namespace aia

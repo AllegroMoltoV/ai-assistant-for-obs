@@ -199,6 +199,25 @@ std::string add_settings_text(const char *obs_id, const json &settings)
 	return out;
 }
 
+json nullable_text(const std::string &text)
+{
+	return text.empty() ? json() : json(text);
+}
+
+// AI が追加したことを示す目印を、ソースかフィルタの private settings に書く
+void write_added_mark(obs_source_t *source, const std::string &name, const std::string &parent)
+{
+	OBSDataAutoRelease priv = obs_source_get_private_settings(source);
+	OBSDataAutoRelease mark = obs_data_create_from_json(dump_json(added_mark(name, parent)).c_str());
+	obs_data_apply(priv, mark);
+}
+
+json added_mark_of(obs_source_t *source)
+{
+	OBSDataAutoRelease priv = obs_source_get_private_settings(source);
+	return data_to_json(priv, false);
+}
+
 double round_to(double value, double unit)
 {
 	return std::round(value / unit) * unit;
@@ -554,6 +573,7 @@ bool prepare_output(const Change &change, const OutputActivity &activity, json &
 	entry["name"] = key.name;
 	entry["json_file"] = key.kind != OutputKey::Kind::Config;
 	entry["video"] = is_video_setting_key(change.key);
+	item.timing = output_apply_timing(mode, change.key, old_text, new_text);
 	item.label = localized(change.target == ChangeTarget::VideoSetting ? "Proposal.VideoSetting"
 									   : "Proposal.OutputSetting",
 			       {path.empty() ? change.key : path});
@@ -570,7 +590,6 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 		 {"key", change.key},
 		 {"after", change.value}};
 	json before;
-	json id = json::array({target_name(change.target)});
 	const UiText &ui = ui_text();
 
 	bool ok = false;
@@ -578,7 +597,6 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 	case ChangeTarget::SourceSetting:
 	case ChangeTarget::FilterSetting:
 		ok = prepare_source_setting(change, entry, before, item, error);
-		id.insert(id.end(), {change.source, change.filter, change.key});
 		break;
 	case ChangeTarget::SourceVisibility: {
 		OBSSourceAutoRelease scene = obs_get_source_by_name(change.scene.c_str());
@@ -591,7 +609,6 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 		item.before = bool_value_text(before, ui.obs, "Show", "Hide", ui);
 		item.after = bool_value_text(change.value, ui.obs, "Show", "Hide", ui);
 		item.label = localized("Proposal.SourceVisibility", {change.scene, change.source});
-		id.insert(id.end(), {change.scene, change.source});
 		ok = true;
 		break;
 	}
@@ -603,7 +620,6 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 		item.before = bool_value_text(before, ui.plugin, "Value.Enabled", "Value.Disabled", ui);
 		item.after = bool_value_text(change.value, ui.plugin, "Value.Enabled", "Value.Disabled", ui);
 		item.label = localized("Proposal.FilterEnabled", {change.source, change.filter});
-		id.insert(id.end(), {change.source, change.filter});
 		ok = true;
 		break;
 	}
@@ -613,17 +629,18 @@ bool prepare_change(const Change &change, const OutputActivity &activity, json &
 	case ChangeTarget::AudioSyncOffsetMs:
 	case ChangeTarget::AudioTracks:
 		ok = prepare_audio(change, entry, before, item, error);
-		id.push_back(change.source);
 		break;
 	case ChangeTarget::OutputSetting:
 	case ChangeTarget::VideoSetting:
 		ok = prepare_output(change, activity, entry, before, item, error);
-		// 出力の設定は対象の種類によらず同じキーを指すため、キーだけで識別する
-		id = json::array({"output", change.key});
 		break;
 	}
 	entry["before"] = before;
-	item.target_id = dump_json(id);
+	// change_settings の引数と同じ形で、変える前と後の値を記録する。元に戻す提案にそのまま使える
+	item.record = {{"target", target_name(change.target)},       {"scene", nullable_text(change.scene)},
+		       {"source", nullable_text(change.source)},     {"filter", nullable_text(change.filter)},
+		       {"key", nullable_text(change.key)},           {"before_value_json", dump_json(before)},
+		       {"after_value_json", dump_json(change.value)}};
 	return ok;
 }
 
@@ -811,7 +828,7 @@ void restore_entries(const std::vector<const json *> &entries, bool to_after)
 }
 
 // 変更の一覧を前から書き込む。失敗したら書き込んだ分を戻す
-bool write_changes(const json &changes, bool to_after, std::string &error)
+bool write_changes(const json &changes, std::string &error)
 {
 	if (!changes.is_array()) {
 		error = "the proposal has no changes";
@@ -820,9 +837,6 @@ bool write_changes(const json &changes, bool to_after, std::string &error)
 	std::vector<const json *> order;
 	for (const auto &entry : changes)
 		order.push_back(&entry);
-	// 取り消しは適用の逆順に行う
-	if (!to_after)
-		std::reverse(order.begin(), order.end());
 
 	// 出力の設定が途中で書けずに一部だけ変わることを避けるため、先に確かめる
 	const bool has_output =
@@ -833,15 +847,15 @@ bool write_changes(const json &changes, bool to_after, std::string &error)
 	std::vector<const json *> written;
 	bool video = false;
 	for (const json *entry : order) {
-		if (!write_change(*entry, to_after, error)) {
-			restore_entries(written, !to_after);
+		if (!write_change(*entry, true, error)) {
+			restore_entries(written, false);
 			return false;
 		}
 		written.push_back(entry);
 		video = video || entry->value("video", false);
 	}
 	if (video && !reset_video_and_verify(error)) {
-		restore_entries(written, !to_after);
+		restore_entries(written, false);
 		return false;
 	}
 	return true;
@@ -894,6 +908,7 @@ bool add_item_now(const json &data, std::string &error)
 			error = "OBS could not create the filter";
 			return false;
 		}
+		write_added_mark(filter, name, parent_name);
 		obs_source_filter_add(parent, filter);
 		return true;
 	}
@@ -913,6 +928,7 @@ bool add_item_now(const json &data, std::string &error)
 		error = "OBS could not create the source";
 		return false;
 	}
+	write_added_mark(source, name, std::string());
 	if (!obs_scene_add(scene, source)) {
 		error = "OBS could not add the source to the scene";
 		return false;
@@ -920,35 +936,65 @@ bool add_item_now(const json &data, std::string &error)
 	return true;
 }
 
-// 追加の取り消し。利用者が取り消しを押したときだけ通る。名前と種類の両方が一致するものだけを取り除く
-bool remove_added_item(const json &data, std::string &error)
-{
-	const std::string obs_id = data.value("obs_id", "");
-	const std::string parent_name = data.value("parent", "");
-	const std::string name = data.value("name", "");
-	const bool is_filter = data.value("is_filter", false);
+// ---------------------------------------------------------------------------
+// 削除。対象は AI が追加した目印のあるフィルタとソースに限る
 
-	OBSSourceAutoRelease parent = obs_get_source_by_name(parent_name.c_str());
-	if (!parent) {
+// 削除の対象。フィルタなら付け先のソースとフィルタ、ソースならシーンの項目とそのソース
+struct RemovalTarget {
+	OBSSourceAutoRelease parent;
+	OBSSourceAutoRelease filter;
+	obs_sceneitem_t *scene_item = nullptr;
+	obs_source_t *item = nullptr;
+};
+
+bool locate_removal(bool is_filter, const std::string &parent_name, const std::string &name, RemovalTarget &out,
+		    std::string &error)
+{
+	out.parent = obs_get_source_by_name(parent_name.c_str());
+	if (!out.parent) {
 		error = (is_filter ? "source not found: " : "scene not found: ") + parent_name;
 		return false;
 	}
 	if (is_filter) {
-		OBSSourceAutoRelease filter = obs_source_get_filter_by_name(parent, name.c_str());
-		if (!filter || obs_id != text_or_empty(obs_source_get_id(filter))) {
-			error = "the added filter was not found: " + name;
+		out.filter = obs_source_get_filter_by_name(out.parent, name.c_str());
+		if (!out.filter) {
+			error = "filter not found on " + parent_name + ": " + name;
 			return false;
 		}
-		obs_source_filter_remove(parent, filter);
-		return true;
+		out.item = out.filter;
+	} else {
+		obs_scene_t *scene = obs_scene_from_source(out.parent);
+		out.scene_item = scene ? obs_scene_find_source(scene, name.c_str()) : nullptr;
+		if (!out.scene_item) {
+			error = "source not found in scene " + parent_name + ": " + name;
+			return false;
+		}
+		out.item = obs_sceneitem_get_source(out.scene_item);
 	}
-	obs_scene_t *scene = obs_scene_from_source(parent);
-	obs_sceneitem_t *item = scene ? obs_scene_find_source(scene, name.c_str()) : nullptr;
-	if (!item || obs_id != text_or_empty(obs_source_get_id(obs_sceneitem_get_source(item)))) {
-		error = "the added source was not found in " + parent_name + ": " + name;
+	// 利用者が作ったものは削除しない。目印は追加したときに書いたもので、名前と付け先も一致する必要がある
+	if (!has_added_mark(added_mark_of(out.item), name, is_filter ? parent_name : std::string())) {
+		error = "This item was not added by the assistant, so it cannot be deleted. Suggest hiding, disabling "
+			"or muting it instead.";
 		return false;
 	}
-	obs_sceneitem_remove(item);
+	return true;
+}
+
+// 承認の時点でも目印を確かめ直し、提案の後に別のものへ置き換わっていれば削除しない
+bool remove_marked_item(const json &data, std::string &error)
+{
+	const bool is_filter = data.value("is_filter", false);
+	RemovalTarget target;
+	if (!locate_removal(is_filter, data.value("parent", ""), data.value("name", ""), target, error))
+		return false;
+	if (data.value("obs_id", "") != text_or_empty(obs_source_get_id(target.item))) {
+		error = "the item changed after the proposal";
+		return false;
+	}
+	if (is_filter)
+		obs_source_filter_remove(target.parent, target.filter);
+	else
+		obs_sceneitem_remove(target.scene_item);
 	return true;
 }
 
@@ -1006,6 +1052,8 @@ bool collect_scene_item(obs_scene_t *, obs_sceneitem_t *item, void *param)
 	json entry = {{"name", text_or_empty(obs_source_get_name(source))},
 		      {"type_id", text_or_empty(obs_source_get_id(source))},
 		      {"visible", obs_sceneitem_visible(item)}};
+	if (has_added_mark(added_mark_of(source), text_or_empty(obs_source_get_name(source)), std::string()))
+		entry["added_by_assistant"] = true;
 	if (obs_sceneitem_is_group(item)) {
 		json children = json::array();
 		obs_sceneitem_group_enum_items(item, collect_scene_item, &children);
@@ -1022,13 +1070,17 @@ bool collect_source(void *param, obs_source_t *source)
 	return true;
 }
 
-void collect_filter(obs_source_t *, obs_source_t *filter, void *param)
+void collect_filter(obs_source_t *parent, obs_source_t *filter, void *param)
 {
 	OBSDataAutoRelease settings = obs_source_get_settings(filter);
-	static_cast<json *>(param)->push_back({{"name", text_or_empty(obs_source_get_name(filter))},
-					       {"type_id", text_or_empty(obs_source_get_id(filter))},
-					       {"enabled", obs_source_enabled(filter)},
-					       {"settings", data_to_json(settings, true)}});
+	const std::string name = text_or_empty(obs_source_get_name(filter));
+	json entry = {{"name", name},
+		      {"type_id", text_or_empty(obs_source_get_id(filter))},
+		      {"enabled", obs_source_enabled(filter)},
+		      {"settings", data_to_json(settings, true)}};
+	if (has_added_mark(added_mark_of(filter), name, text_or_empty(obs_source_get_name(parent))))
+		entry["added_by_assistant"] = true;
+	static_cast<json *>(param)->push_back(std::move(entry));
 }
 
 double percent(uint64_t part, uint64_t total)
@@ -1353,9 +1405,13 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 		}
 		item.label = localized("Proposal.AddSource", {parent_name, request.name, type_name});
 	}
-	item.addition = true;
+	item.kind = ProposalItemKind::Add;
 	item.after = add_settings_text(kind->obs_id, request.settings);
-	item.target_id = dump_json(json::array({"add", parent_name, request.name}));
+	// remove_item の引数と同じ形で記録する。追加を元に戻す提案にそのまま使える
+	item.record = {{"kind", kind->is_filter ? "filter" : "source"},
+		       {"source", kind->is_filter ? json(parent_name) : json()},
+		       {"scene", kind->is_filter ? json() : json(parent_name)},
+		       {"name", request.name}};
 	proposal.items.push_back(std::move(item));
 	proposal.apply_data = {{"kind", "add"},
 			       {"kind_name", kind->name},
@@ -1368,26 +1424,50 @@ Parsed<Proposal> prepare_add_proposal(const AddRequest &request)
 	return result;
 }
 
+Parsed<Proposal> prepare_remove_proposal(const RemoveRequest &request)
+{
+	Parsed<Proposal> result;
+	Proposal &proposal = result.value;
+	proposal.tool = kToolRemoveItem;
+	proposal.reason = request.reason;
+
+	const std::string parent_name = request.is_filter ? request.source : request.scene;
+	RemovalTarget target;
+	if (!locate_removal(request.is_filter, parent_name, request.name, target, result.error))
+		return result;
+	const std::string obs_id = text_or_empty(obs_source_get_id(target.item));
+	const std::string type_name = text_or_empty(obs_source_get_display_name(obs_id.c_str()));
+	const OutputActivity activity = current_output_activity();
+	proposal.live_audio = (activity.streaming || activity.recording) && has_audio(target.item);
+
+	ProposalItem item;
+	item.kind = ProposalItemKind::Remove;
+	item.label = request.is_filter ? localized("Proposal.RemoveFilter", {parent_name, request.name, type_name})
+				       : localized("Proposal.RemoveSource", {parent_name, request.name, type_name});
+	item.record = {{"kind", request.is_filter ? "filter" : "source"},
+		       {"source", nullable_text(request.source)},
+		       {"scene", nullable_text(request.scene)},
+		       {"name", request.name}};
+	proposal.items.push_back(std::move(item));
+	proposal.apply_data = {{"kind", "remove"},
+			       {"obs_id", obs_id},
+			       {"is_filter", request.is_filter},
+			       {"parent", parent_name},
+			       {"name", request.name}};
+	result.ok = true;
+	return result;
+}
+
 bool apply_proposal(const Proposal &proposal, std::string &error)
 {
 	const json &data = proposal.apply_data;
 	const std::string kind = data.is_object() ? data.value("kind", "") : std::string();
 	if (kind == "add")
 		return add_item_now(data, error);
+	if (kind == "remove")
+		return remove_marked_item(data, error);
 	if (kind == "change")
-		return write_changes(data.contains("changes") ? data.at("changes") : json(), true, error);
-	error = "the proposal data is invalid";
-	return false;
-}
-
-bool undo_proposal(const Proposal &proposal, std::string &error)
-{
-	const json &data = proposal.apply_data;
-	const std::string kind = data.is_object() ? data.value("kind", "") : std::string();
-	if (kind == "add")
-		return remove_added_item(data, error);
-	if (kind == "change")
-		return write_changes(data.contains("changes") ? data.at("changes") : json(), false, error);
+		return write_changes(data.contains("changes") ? data.at("changes") : json(), error);
 	error = "the proposal data is invalid";
 	return false;
 }

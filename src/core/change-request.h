@@ -74,6 +74,17 @@ struct AddRequest {
 	nlohmann::json settings = nlohmann::json::object();
 };
 
+// remove_item の要求。削除できるのは AI が追加したフィルタとソースだけで、その判定は OBS とつなぐ層で行う
+struct RemoveRequest {
+	std::string reason;
+	bool is_filter = false;
+	// フィルタの付け先のソース
+	std::string source;
+	// ソースを取り除くシーン
+	std::string scene;
+	std::string name;
+};
+
 template<typename T> struct Parsed {
 	bool ok = false;
 	T value;
@@ -85,5 +96,6 @@ template<typename T> struct Parsed {
 // OBS の状態に依存する検査 (ソースの有無、出力の稼働、出力の設定の可否) は OBS とつなぐ層で行う
 Parsed<ChangeRequest> parse_change_settings(const std::string &arguments);
 Parsed<AddRequest> parse_add_item(const std::string &arguments);
+Parsed<RemoveRequest> parse_remove_item(const std::string &arguments);
 
 } // namespace aia

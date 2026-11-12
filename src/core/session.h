@@ -36,8 +36,8 @@ public:
 	virtual std::string run_read_tool(const std::string &name, const std::string &arguments) = 0;
 	virtual Parsed<Proposal> prepare_change(const ChangeRequest &request) = 0;
 	virtual Parsed<Proposal> prepare_add(const AddRequest &request) = 0;
+	virtual Parsed<Proposal> prepare_remove(const RemoveRequest &request) = 0;
 	virtual bool apply(const Proposal &proposal, std::string &error) = 0;
-	virtual bool undo(const Proposal &proposal, std::string &error) = 0;
 };
 
 enum class SessionState {
@@ -58,8 +58,6 @@ inline constexpr const char *kNoticeTooManySteps = "Error.TooManySteps";
 inline constexpr const char *kNoticeIncomplete = "Error.Incomplete";
 inline constexpr const char *kNoticeCompacted = "Notice.Compacted";
 inline constexpr const char *kNoticeCompactFailed = "Error.CompactFailed";
-inline constexpr const char *kNoticeUndone = "Notice.Undone";
-inline constexpr const char *kNoticeUndoFailed = "Error.UndoFailed";
 inline constexpr const char *kNoticeApplyFailed = "Error.ApplyFailed";
 inline constexpr const char *kNoticeCancelled = "Notice.Cancelled";
 // できること・できないこと・質問の例 (/help)。画面の側で中身を描く
@@ -80,7 +78,6 @@ public:
 	void send_user_message(const std::string &text);
 	void approve(int proposal_id);
 	void reject(int proposal_id);
-	void undo(int proposal_id);
 	// 手動の圧縮 (/compact) と、勧めのボタンからの圧縮
 	void compact();
 	// 画面とモデルに渡す内容の両方を消す (/clear)
@@ -118,7 +115,7 @@ private:
 	ProposalBook proposals_;
 	SessionState state_ = SessionState::Idle;
 	int steps_ = 0;
-	// 世代の番号。消去や取り消しの後に届いた古い応答を捨てる
+	// 世代の番号。消去や中止の後に届いた古い応答を捨てる
 	int generation_ = 0;
 	std::function<void()> on_changed_;
 };

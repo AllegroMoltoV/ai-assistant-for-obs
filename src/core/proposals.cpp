@@ -50,8 +50,6 @@ const char *proposal_state_name(ProposalState state)
 		return "rejected_by_user";
 	case ProposalState::Failed:
 		return "failed";
-	case ProposalState::Undone:
-		return "undone_by_user";
 	}
 	return "unknown";
 }
@@ -104,33 +102,6 @@ bool ProposalBook::mark_failed(int id, const std::string &error)
 	return true;
 }
 
-bool ProposalBook::can_undo(int id) const
-{
-	const Proposal *target = find(id);
-	if (!target || target->state != ProposalState::Applied)
-		return false;
-	// 後から同じ対象を変えた提案が適用されたままなら、先にそちらを戻す必要がある
-	for (const auto &later : proposals_) {
-		if (later.id <= id || later.state != ProposalState::Applied)
-			continue;
-		for (const auto &a : target->items) {
-			for (const auto &b : later.items) {
-				if (a.target_id == b.target_id)
-					return false;
-			}
-		}
-	}
-	return true;
-}
-
-bool ProposalBook::mark_undone(int id)
-{
-	if (!can_undo(id))
-		return false;
-	find_mutable(id)->state = ProposalState::Undone;
-	return true;
-}
-
 std::string ProposalBook::tool_output(int id) const
 {
 	const Proposal *p = find(id);
@@ -139,7 +110,42 @@ std::string ProposalBook::tool_output(int id) const
 	nlohmann::json out = {{"proposal_id", p->id}, {"status", proposal_state_name(p->state)}};
 	if (!p->error.empty())
 		out["error"] = p->error;
-	return out.dump();
+	nlohmann::json items = nlohmann::json::array();
+	for (const auto &item : p->items) {
+		nlohmann::json entry = {{"label", item.label}};
+		switch (item.kind) {
+		case ProposalItemKind::Change:
+			entry["operation"] = "change";
+			entry["before"] = item.before;
+			entry["after"] = item.after;
+			entry["applies"] = apply_timing_name(item.timing);
+			break;
+		case ProposalItemKind::Add:
+			entry["operation"] = "add";
+			entry["settings"] = item.after;
+			break;
+		case ProposalItemKind::Remove:
+			entry["operation"] = "remove";
+			break;
+		}
+		if (item.record.is_object())
+			entry.update(item.record);
+		items.push_back(std::move(entry));
+	}
+	out["items"] = std::move(items);
+	return out.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+}
+
+std::vector<ApplyTiming> notable_timings(const Proposal &proposal)
+{
+	std::vector<ApplyTiming> timings;
+	for (const auto &item : proposal.items) {
+		if (item.timing == ApplyTiming::Immediate ||
+		    std::find(timings.begin(), timings.end(), item.timing) != timings.end())
+			continue;
+		timings.push_back(item.timing);
+	}
+	return timings;
 }
 
 } // namespace aia
