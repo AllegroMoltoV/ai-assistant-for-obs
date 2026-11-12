@@ -75,15 +75,22 @@ QString proposal_state_text(ProposalState state)
 
 } // namespace
 
-Dock::Dock(ToolHost &host, QWidget *parent)
+Dock::Dock(ToolHost &host, std::unique_ptr<Transport> transport, QWidget *parent)
 	: QWidget(parent),
-	  transport_(std::make_unique<QtTransport>()),
+	  transport_(transport ? std::move(transport) : std::make_unique<QtTransport>()),
 	  session_(std::make_unique<Session>(*transport_, host))
 {
 	// 縦に長いドックとして使う前提で、候補のチップや入力欄が見切れない幅を保つ
 	setMinimumWidth(kDockMinimumWidth);
-	// 話し手と提案を色で見分けられるようにする。色は OBS のテーマのパレットから取り、明暗の両方で読めるようにする
-	setStyleSheet("QFrame#aiaUser { background: palette(alternate-base); border-radius: 6px; }"
+	// 話し手と提案を色で見分けられるようにする。色は OBS のテーマのパレットから取り、明暗の両方で読めるようにする。
+	// alternate-base と base は多くのテーマでほぼ同じ色のため、利用者の発言には強調色を薄く重ねる
+	QColor user_tint = palette().color(QPalette::Highlight);
+	user_tint.setAlpha(70);
+	setStyleSheet(QString("QFrame#aiaUser { background: rgba(%1, %2, %3, %4); border-radius: 6px; }")
+			      .arg(user_tint.red())
+			      .arg(user_tint.green())
+			      .arg(user_tint.blue())
+			      .arg(user_tint.alpha()) +
 		      "QFrame#aiaAssistant { background: palette(base); border-radius: 6px; }"
 		      "QFrame#aiaProposal { border: 2px solid palette(highlight); border-radius: 6px; }"
 		      "QFrame#aiaSummary { border: 1px dashed palette(mid); border-radius: 6px; }");
@@ -93,7 +100,6 @@ Dock::Dock(ToolHost &host, QWidget *parent)
 	scroll_->setFrameShape(QFrame::NoFrame);
 	history_ = new QWidget(scroll_);
 	history_layout_ = new QVBoxLayout(history_);
-	history_layout_->setAlignment(Qt::AlignTop);
 	scroll_->setWidget(history_);
 	// 新しい部品の配置が決まり、スクロールの範囲が広がった時点で末尾へ送る
 	connect(scroll_->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int, int max) {
@@ -225,6 +231,9 @@ void Dock::rebuild()
 		history_layout_->addWidget(build_empty_state());
 	for (const auto &entry : entries)
 		history_layout_->addWidget(build_entry(entry));
+	// 上に詰めるため、末尾に伸びる余白を置く。配置の上寄せの指定 (setAlignment) は、
+	// 折り返す文の高さを実際の幅ではなく既定の幅で求めさせ、狭いドックで文が見切れるため使わない
+	history_layout_->addStretch(1);
 
 	const SessionState state = session_->state();
 	const Conversation &conversation = session_->conversation();

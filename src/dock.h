@@ -20,7 +20,8 @@ namespace aia {
 // 相談のチャットのドック。表示は Session の会話の履歴から毎回作り直す
 class Dock : public QWidget {
 public:
-	explicit Dock(ToolHost &host, QWidget *parent = nullptr);
+	// transport を省くと OpenAI へ送る QtTransport を使う。開発用の画面の確認の道具は、模した応答を返す送り先を渡す
+	explicit Dock(ToolHost &host, std::unique_ptr<Transport> transport = nullptr, QWidget *parent = nullptr);
 	~Dock() override;
 
 protected:
@@ -41,7 +42,7 @@ private:
 	QWidget *build_help();
 
 	// 送り先は Session より後に破棄する。破棄の後に届いた結果を捨てるため
-	std::unique_ptr<QtTransport> transport_;
+	std::unique_ptr<Transport> transport_;
 	std::unique_ptr<Session> session_;
 
 	QScrollArea *scroll_ = nullptr;

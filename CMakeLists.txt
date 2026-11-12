@@ -112,6 +112,26 @@ if(AIA_BUILD_MODEL_EVAL)
   target_link_libraries(aia-model-eval PRIVATE aia-core CURL::libcurl)
 endif()
 
+# ドックの画面を OBS を起動せずに描き、画像と文字の見切れの検査の結果を書き出す開発用の道具。CI ではビルドしない
+option(AIA_BUILD_DOCK_PREVIEW "Build the dock preview tool" OFF)
+if(AIA_BUILD_DOCK_PREVIEW)
+  add_executable(
+    aia-dock-preview
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/dock-preview/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dock.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/settings-dialog.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/length-gauge.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/chat-input.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/qt-transport.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/main-thread.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/openai-client.cpp"
+  )
+  target_include_directories(aia-dock-preview PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+  target_link_libraries(aia-dock-preview PRIVATE aia-core OBS::libobs CURL::libcurl Qt6::Core Qt6::Widgets)
+  target_compile_definitions(aia-dock-preview PRIVATE AIA_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  set_target_properties(aia-dock-preview PROPERTIES AUTOMOC ON)
+endif()
+
 # ビルドの直後に OBS のプラグインのフォルダーへ配置する。
 # 導入先はほかのプラグインと共有のため既定は OFF とし、実機で確かめるときだけ ON にする
 option(ENABLE_POST_BUILD_INSTALL "Run cmake --install after build" OFF)
