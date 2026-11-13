@@ -240,6 +240,10 @@ Anthropic Claude Code is used for almost the entire development process, includi
 
 ## 更新情報
 
+### v1.0.2
+
+- リリースの配布物にビルドの来歴の証明 (GitHub Artifact Attestation) を付けるようにしました。プラグインの動作は v1.0.1 と同じです。
+
 ### v1.0.1
 
 - 配信プラグイン倉庫くんの説明の画像を、OBS の画面全体が映るものに差し替えました。プラグインの動作は v1.0.0 と同じです
