@@ -1,1 +1,1 @@
-{"name": "AI Assistant for OBS Studio", "os": ["windows"]}
+{"name": "AI Assistant for OBS Studio", "os": ["windows"], "paidFeatures": false, "paidServices": ["OpenAI API"], "restrictedAssets": false, "supportUrl": "https://github.com/sponsors/AllegroMoltoV"}
